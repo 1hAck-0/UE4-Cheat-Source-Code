@@ -1,0 +1,3698 @@
+<?xml version="1.0" encoding="utf-8"?>
+<CheatTable CheatEngineTableVersion="34">
+  <CheatEntries>
+    <CheatEntry>
+      <ID>25330</ID>
+      <Description>"Unreal Engine"</Description>
+      <Options moHideChildren="1"/>
+      <LastState Activated="1"/>
+      <VariableType>Auto Assembler Script</VariableType>
+      <AssemblerScript Async="1">{$lua}
+function ue4config()
+ local sub=targetIs64Bit() and 0 or 4
+ UObject = {}
+
+ --if UE4ver&lt;=2 and targetIs64Bit() then ue4determineversion() end
+-----------------------------
+----------UE4 struct---------
+
+ if UE4ver&gt;7 then
+
+    UObject.ObjectId= 0xC-sub
+    UObject.Class = 0x10-sub
+    UObject.FNameIndex = 0x18-(sub*2)
+    UObject.Outer = 0x20-(sub*2)
+
+  if UE4ver&gt;=25 then
+    UObject.super= 0x40
+    UObject.member= 0x50
+    UObject.nextmember= 0x20
+    UObject.Offset= 0x4C
+    UObject.propsize=0x3C
+    UObject.bitmask= 0x7A
+    UObject.funct= 0xD8
+    UObject.Property= 0x78
+    UObject.enumoffset = 0x40
+    UObject.enummul = 0x10
+    UObject.enumname = 0x0
+    UObject.enumindex = 0x8
+
+  elseif UE4ver&gt;=22 then
+    UObject.super= 0x40
+    UObject.member= 0x48
+    UObject.funct= 0xC0
+  else
+    UObject.super= 0x30 -(sub*4)
+    UObject.member= 0x38 -(sub*5)
+    UObject.funct= 0xB0
+  end
+
+  if UE4ver&lt;25 then
+    UObject.nextmember=0x28-(sub*3)
+    UObject.Offset= 0x44-(sub*4)
+    UObject.propsize= 0x34-(sub*3/2)
+    UObject.bitmask= 0x72-(sub*8)
+
+    UObject.Property= 0x70-(sub*8)
+
+  end
+
+  if UE4ver&lt;11 then
+    UObject.Offset= 0x4C
+  end
+
+----------------------------
+---------UE3 struct---------
+--1.25
+--[[
+ elseif UE4ver&gt;=1 then
+
+    UObject.ObjectId= 0x4
+    UObject.Outer = 0x14
+    UObject.FNameIndex = 0x18
+    UObject.Class = 0x20
+    UObject.Offset= 0x48
+    UObject.super= 0x34
+    UObject.member= 0x38
+    UObject.nextmember=0x28
+    UObject.propsize= 0x30
+    UObject.bitmask= 0x60
+    UObject.Property= 0x58
+
+]]
+--0.10246
+ else
+ --[[
+    UObject.ObjectId= 0x20
+    UObject.Outer = 0x28
+    UObject.FNameIndex = 0x2C
+    UObject.Class = 0x34
+
+    UObject.Offset= 0x60
+
+    UObject.super= 0x48
+    UObject.member= 0x4C
+
+    UObject.nextmember=0x3C
+    UObject.propsize= 0x44
+    UObject.bitmask= 0x70]]
+
+ end
+
+---------------------------
+end
+
+
+ue4type={
+		['BoolProperty']=vtByte,
+		['ByteProperty']=vtByte,
+		['FloatProperty']=vtSingle,
+        ['StructProperty']=vtDword,
+		['IntProperty']=vtDword,
+        ['NameProperty']=vtQword,
+        ['Int64Property']=vtQword,
+		['TextProperty']=vtPointer,
+        ['StrProperty']=vtPointer,
+        ['ArrayProperty']=vtPointer,
+        ['MapProperty']=vtPointer,
+        ['ClassProperty']=vtPointer,
+		['ObjectProperty']=vtPointer}
+
+function ue4versioncheck()
+ --if true then return 0 end
+ local fileversion,info =getFileVersion(enumModules()[1].PathToFile)
+ if not info then return 0 end
+ return tonumber(info.minor..'.'..info.release)
+end
+
+function FNameStringAlgo(FName,IndexOnly)
+ if not FName then return nil end
+ local UEver=UE4ver
+ local sub=targetIs64Bit() and 0 or 4
+ local size=targetIs64Bit() and 8 or 4
+ local number,str,pointer
+ if not IndexOnly then
+   number=UEver&gt;2 and readInteger(FName+4) or 0
+   FName=readInteger(FName)
+ else number=FName&gt;&gt;32 FName=FName&amp;0xFFFFFFFF
+ end
+
+
+ if not FName then return nil end
+
+ if isMassEffect then
+   local i=(FName&gt;&gt;0x1D)&amp;7
+   FName=FName&amp;0x1FFFFFFF
+   str=readString(readPointer(getAddress('FNamePool')+i*8)+FName+stringoffset)
+   return str
+ end
+
+ if FNameList[FName] then
+   if number&gt;0 then return FNameList[FName]..'_'..number-1 end
+   return FNameList[FName]
+ end
+
+ local CFName=FName
+
+ if readPointer(FNameString) then
+   if not FNameStringStub then FNameStringStub=createExecuteCodeExStub(0,FNameString,0,0)end
+   if not FNameStringRE then FNameStringRE=createRemoteExecutor()end
+
+   if not mem then mem=allocateMemory(0x100)end
+   writeQword(mem+0x50+UObject.FNameIndex,FName)
+   FNameStringRE.executeStub(FNameStringStub,{mem+0x50,mem})
+   str=readPointer(mem)
+   if str then str=readString(str,readInteger(mem+0x8)*2,true) end
+   --deAlloc(mem)
+
+ elseif UEver&gt;=23 then
+  local i=(FName&gt;&gt;0x10)
+  FName=(FName&amp;0xFFFF)*2
+  pointer=readPointer(FNamePool+i*size)
+
+  local le =  readSmallInteger(pointer+FName)
+  if not le then return nil end
+  le=le&gt;&gt;6
+  if le&gt;200 then return nil end
+  local widechar=true and readBytes(pointer+FName,1)==1 or false
+  --print(FName)
+  le=(widechar and le*2 or le)-1
+  if CFName==3 and not stringoffset then
+    for k=2,0x20,2 do
+      if string.find(readString(pointer+FName+k,le,widechar),'ByteProperty') then stringoffset=k break end
+      --print(k)
+    end
+  end
+
+  if not stringoffset then return end
+
+  str=readString(pointer+FName+stringoffset,le,widechar)
+ else
+  local i
+
+  if FNamePool2 then FName= FName &lt;0x25A and readInteger(FName*4+FNamePool) or FName
+  else
+    i=UEver&gt;7 and (FName&gt;&gt;0xE) or 0
+    FName= (UEver&gt;7 and (FName&amp;0x3FFF) or FName) *  (8-sub)
+  end
+
+  --print(i)
+  --print(FName)
+
+
+  local pointer
+  if FNamePool2 then
+    pointer=readPointer(FNamePool2)+FName
+  else
+    pointer=readPointer(FNamePool+i*size)
+    if not readPointer(pointer) then return nil end
+    pointer=readPointer(pointer+FName)
+  end
+
+  --print(string.format('%X',pointer))
+
+  if not readPointer(pointer) then return nil end
+  local pointers,pointers2=pointer
+  if stringoffset2 then pointer=readPointer(pointer+stringoffset2)end
+  pointers2=pointer
+
+  --print(string.format('%X',pointer))
+
+  --local offset=UE4ver&gt;=22 and 0xC-sub or 0x10-(sub*2)
+  if CFName==1 and (not stringoffset or not stringoffsetid) then
+
+     for k=0,0x30,4 do
+        str=readString(pointer+k,13)
+        if string.find(str,'ByteProperty') then stringoffset=k break end
+      end
+
+      if not stringoffset then
+        for k=0,0x30,4 do
+          str=readString(pointer+k,13*2,true)
+          if string.find(str,'ByteProperty') then stringoffset=k forcewidechar=true break end
+        end
+      end
+
+      pointer=pointers
+
+     for j=0, stringoffset-4,4 do
+       if readInteger(pointer+j)==2 then stringoffsetid=j end
+     end
+  --print(string.format('%X',FName))
+  --print(string.format('%X',pointer))
+  --print(string.format('%X',offset))
+
+  else
+  if not stringoffset then return end
+  --print(string.format('%X',pointer))
+
+  pointer=pointers
+
+  local widechar=stringoffsetid and (readInteger(pointer+stringoffsetid)&amp;1==1 or false) or false
+
+  pointer=pointers2
+
+  if stringoffset2 and not readPointer(pointer) then pointer=pointers+stringoffset2 end
+
+  widechar= forcewidechar and true or widechar
+
+  str= readString(pointer+stringoffset,200,widechar)
+
+  if not str then str= readString(pointer+stringoffset,100,widechar) end
+  if not str then str= readString(pointer+stringoffset,50,widechar) end
+  if not str then str= readString(pointer+stringoffset,30,widechar) end
+  if not str then
+   local le=0
+  --print(string.format('%X',FName))
+  --print(string.format('%X',pointer))
+   while(true)do
+    if le&gt;50 then break end
+    if readBytes(pointer+stringoffset+le)==0 then break end
+    le=le+1
+   end
+   str= readString(pointer+stringoffset,le)
+  end
+  --print(stringoffset)
+
+
+ end end
+ if not str then return nil end
+ if number&gt;0 then return str..'_'..number-1 end
+ --print(str)
+ FNameList[CFName]=str
+ --print(str)
+ return str
+end
+
+function GetNameAlgo(object)
+ if not object then return nil end
+--[[
+ if ObjectList[object] then --print(ObjectList[object])
+   return ObjectList[object]
+ end]]
+ local pointer,size,str1,str2=readPointer(object+UObject.Class),targetIs64Bit() and 8 or 4
+ if not pointer then return nil end
+ --print(string.format('%X',fnameoffset))
+ --print(string.format('%X',object+fnameoffset))
+ str1=FNameStringAlgo(readInteger(pointer+UObject.FNameIndex),true)
+
+ --print(str1)
+ --if readInteger(pointer+fnameoffset+4)~=0 then return nil end
+
+ str2=FNameStringAlgo(readInteger(object+UObject.FNameIndex),true)
+ --print(str2)
+ if not str2 then str2=FNameStringAlgo(readInteger(object+UObject.FNameIndex-8),true)end
+ --if str2=='None' then str2=FNameStringAlgo(readInteger(pointer+UObject.Outer+size),true)end
+ if not str1 or str1=='None' or not str2 or str2=='None' then return nil end
+
+
+ str1=str1..' '..str2
+ --print(ObjectList[object])
+ ObjectList[object]=str1
+ return str1
+end
+
+function GetFullNameAlgo(object)
+ if not object then return nil end
+ --if ObjectList[object] then return ObjectList[object] end
+ local pathoffset=UObject.Outer
+ local fnameoffset=UObject.FNameIndex
+ local str=GetNameAlgo(object)
+ if not str then return nil end
+ local number=readInteger(object+fnameoffset+4)
+ local typ=str:sub(1,string.find(str,' ')-1)
+ local isProperty=string.find(typ,'Property')
+ if not isProperty then isProperty=string.find(typ,'Function') end
+ local pointer=readPointer(object+pathoffset)
+ while(true)do
+  if not pointer or pointer==0 then break end
+  local stri=GetNameAlgo(pointer)
+  if not stri then break end
+  typ=stri:sub(1,string.find(stri,' ')-1)
+  local isPropertyc=string.find(typ,'Property')
+  if not isPropertyc then isPropertyc=string.find(typ,'Function') end
+  stri=string.sub(str,1,string.find(str,' '))..stri:sub(string.find(stri,' ')+1,stri:len())
+  local num=readInteger(pointer+fnameoffset+4)
+
+  if number~=num and num==0 or  not isPropertyc and isProperty then stri=stri..':'
+  else stri=stri..'.' end
+  number=num
+  isProperty=isPropertyc
+
+  str=stri..string.sub(str,string.find(str,' ')+1,str:len())
+  pointer=readPointer(pointer+pathoffset)
+
+  if string.find(str,'%./') then
+    stri=string.sub(str,1,string.find(str,' '))
+    str=stri..str:sub(string.find(str,'%./')+1,str:len())
+  break end
+
+ end
+ if not str then return nil end
+ --ObjectList[object]=str
+ return str
+end
+
+function GetFullNameSuperAlgo(object)
+  local super=UObject.super
+  local str1 = GetFullNameSafeAlgo(object)
+  if not str1 then return nil end
+  local pointer = readPointer(object+super)
+  if pointer then
+    local str2 = GetFullNameSafeAlgo(pointer)
+    if str2 then return str1..' ~ '..str2 end
+  end
+  return str1
+end
+
+function GetFullNameSafesAlgo(object)
+ --if ObjectList[object] then return ObjectList[object] end
+ local fnameoffset=0x28
+ local typeoffset=0x8
+ local pathoffset=0x10
+ if not object then return nil end
+ local pointer=readPointer(object+typeoffset)
+ if not pointer then return nil end
+ local str1=FNameStringAlgo(pointer)
+ local str2=FNameStringAlgo(object+fnameoffset)
+ local pointer=readPointer(object+pathoffset)
+ if not pointer then return nil end
+ local str3=GetFullNameAlgo(pointer)
+ if not str1 or str1=='None' or not str2 or str2=='None' or not str3 then return nil end
+ --print(str3)
+ --if string.find(str3,'%./') then string.sub
+ local str=str1..string.sub(str3,string.find(str3,' '),str3:len())..':'..str2
+ --ObjectList[object]=str
+ return str
+end
+
+function GetFullNameSafeAlgo(object)
+ --if ObjectList[object] then return ObjectList[object] end
+ local str= GetFullNameAlgo(object)
+ if str then return str end
+ local fnameoffset=0x28
+ local typeoffset=0x8
+ local pathoffset=0x10
+ if not object then return nil end
+ local pointer=readPointer(object+typeoffset)
+ if not pointer then return nil end
+ local str1=FNameStringAlgo(pointer)
+ local str2=FNameStringAlgo(object+fnameoffset)
+ local pointer=readPointer(object+pathoffset)
+ if not pointer then return nil end
+ local str3=GetFullNameAlgo(pointer)
+ if not str3 then str3=GetFullNameSafesAlgo(pointer)end
+
+ if not str1 or str1=='None' or not str2 or str2=='None' or not str3 then return nil end
+ --print(str3)
+ --if string.find(str3,'%./') then string.sub
+ str=str1..string.sub(str3,string.find(str3,' '),str3:len())..':'..str2
+ --ObjectList[object]=str
+ return str
+end
+
+function FindString(namestr,start,stop,isNoIndex)
+  local acclen=0
+  for i=start,stop do
+    local name=FNameStringAlgo(i+acclen,true)
+    if name and name:len()&lt;200 and name:len()&gt;2 and not string.find(name,'%c')  then
+      --print(name)
+      if name and name:len()&lt;200 and name:len()&gt;2 and not string.find(name,'%c')  then
+        if namestr==name then FNameResult=i+acclen return end
+        if isNoIndex then acclen=acclen+name:len()end
+      end
+    end
+  end
+end
+
+
+function FindStringFName(namestr,isNoIndex)
+  local size
+  if FNamePool2 then size=readInteger(FNamePool2+8)
+
+  elseif UE4ver&gt;=23 then size=(#FNameDict&lt;&lt;0x10)-1
+  elseif UE4ver&gt;7 then size=(#FNameDict&lt;&lt;0xE)-1
+  else size=math.floor(#FNameDict[1]/4) end
+  local count=0x200
+  size=math.floor((size/count)+0.5)
+  ue4parsetablecheck()
+  FNameResult=nil
+  local result
+  local num,start,stop=count,0,0
+  for i=0,size do
+    start=i*num
+    stop=(i+1)*num
+    if FNameResult then break end
+    createThread(FindString(namestr,start,stop-1,isNoIndex))
+  end
+  result=FNameResult
+  FNameResult=nil
+  return result
+end
+
+function getregionsize(address)
+local allregion=enumMemoryRegions()
+ for i=#allregion,1,-1 do
+  if allregion[i].BaseAddress&lt;=address then
+   local BaseAddress=allregion[i].BaseAddress
+   local RegionSize=allregion[i].RegionSize
+   local curSize=BaseAddress+RegionSize-address
+   return curSize,RegionSize,BaseAddress,i
+  end
+ end
+end
+
+sub=targetIs64Bit() and 0 or 4
+
+function ue4parsetableFNamePool()
+  ObjectList={}
+  FNameList={}
+  if readPointer(FNameString) or string.find(process,'StateOfDecay2')then return end
+  local pool=getAddressSafe('FNamePool')
+  if pool then
+    local pointer,pointers
+    if not readPointer(readPointer(pool)) then pointer=pool+0x10
+    else
+      pointer=pool
+      if readPointer(readPointer(readPointer(pointer)))then
+        if readPointer(readPointer(readPointer(readPointer(pointer))))then
+          pointer=readPointer(pointer)
+        end
+      end
+    end
+    if not readPointer(pointer)then pointer=readPointer(pool2+0x10)end
+    FNamePool=pointer
+    FNameDict={}
+    local j=0
+    for i=0,500 do
+      pointers=readPointer(pointer+i*(8-sub))
+      if readPointer(pointers) then
+        FNameDict[i+1]=readBytes(pointers,getregionsize(pointers)-1,true)
+      else j=j+1 end
+      if j&gt;5 then break end
+    end
+  end
+end
+
+function ue4parsetables()
+ local size=targetIs64Bit() and 8 or 4
+ ue4parsetableFNamePool()
+ local pool2=getAddressSafe('GUObjectArray')
+ if pool2 then
+  if NOGUObjectsize then
+    GUObjectsize=0xFFFFFFFF
+    if not readPointer(readPointer(GUObjectAddress))then
+      GUObjectAddress=allocateMemory(0x100) writePointer(GUObjectAddress,pool2)
+    end
+    return
+  end
+
+
+  local pointer,pointers=readPointer(pool2)
+  GUObjectsize=readInteger(pool2+size)
+  if not readPointer(pointer)then GUObjectsize=readInteger(pool2+0x10+size*2+4) GUObjectsize= GUObjectsize==0xFFFFFFFF and readInteger(pool2+0x10+size+4)or GUObjectsize  pointer=readPointer(pool2+0x10)end
+  if not readPointer(readPointer(pointer)) then pointer=pointer+0x10 end
+  --if GetFullNameSafeAlgo(readPointer(pointer)) then pointer=pool2 end
+  if not readPointer(readPointer(readPointer(readPointer(readPointer(pointer))))) then pointer=pool2 end
+  if not readPointer(readPointer(pointer)) then pointer=pointer+0x10 end
+  GUObjectAddress=pointer
+ end
+end
+
+function ue4parsetable()
+  ue4parsetables()
+  local size,val=targetIs64Bit() and 8 or 4,0x50
+
+  local pointerss=readPointer(GUObjectAddress)
+  for i=size,0x50,4 do
+    if readPointer(pointerss+i) and readPointer(readPointer(readPointer(pointerss+i))) then UObjectMul=i print(string.format('%X',i))break end
+  end
+
+  if not UObjectMul and UE4ver&gt;7 then
+    local ObjectScanner={'UE4 Object scanner','UE4 Object scanner V2'}
+    unregisterSymbol('GUObjectArray')
+    print(UE4ver)
+    for i=1,#ObjectScanner do
+      rec=getAddressList().getMemoryRecordByDescription(ObjectScanner[i])
+      if rec then
+        rec.Active=true
+        while rec.AsyncProcessing do sleep(100) end
+      end
+      if readPointer('GUObjectArray') then break end
+    end
+    if not readPointer('GUObjectArray') then error('GUObjectArray not found!')
+    else return ue4parsetable() end
+  end
+  --if not UObject.FNameIndex then
+    if not UObject then UObject={} end
+    for i=0,3 do
+      pointer = readPointer(pointerss+i*UObjectMul)
+      if readPointer(pointer) and checkvalue(pointer+size,0x100,'Object',1,true) then
+        UObject.FNameIndex=checkvalue(pointer+size,val,'Object',1)-pointer
+        UObject.ObjectId=checkvalue(pointer+size,val,i,4)-pointer
+        for j=size,val,4 do
+          if checkvalue(readPointer(pointer+j),val,'Class',1,true) then UObject.Class=j end
+          if checkvalue(readPointer(pointer+j),val,'Core',1) then UObject.Outer=j end
+        end
+        break
+      end
+    end
+    --[[
+    print(string.format('ObjectId=%X\nFNameIndex=%X\nClass=%X\nOuter=%X',
+    UObject.ObjectId,UObject.FNameIndex,UObject.Class,UObject.Outer))]]
+  --end
+  return true
+end
+
+
+function ue4parsetablecheck()
+  if not readPointer(GUObjectAddress) or not readPointer(FNamePool) then return ue4parsetable() end
+  local pointer
+  pointer=readPointer(readPointer(GUObjectAddress))
+  if not ObjectTable or not ObjectTable[1] or not FullNameList or (ObjectTable[1].Address ~= pointer) then return ue4parsetable() end
+--[[
+  local Address,FullName
+  for i=1,#ObjectTable do
+    if ObjectTable[i] and i&gt;#ObjectTable-0x10 then FullName=ObjectTable[i].Type..' '..ObjectTable[i].FullName Address=ObjectTable[i].Address  break end
+  end
+
+  if not GetFullNameSafeAlgo(Address) or FullName~=GetFullNameSafeAlgo(Address) then return ue4parsetable()end
+]]
+ return false
+end
+
+function FindObject(pointer,start,stop,fullname,name)
+  local FullName,Name,Data=fullname,name
+  for j=start,stop do
+    if StaticFindObjectAlgoFoundAddress then break end
+    Data=SaveObject(readPointer(pointer+j*UObjectMul))
+    if FullName and FullNameList[FullName] then break end
+    if Data and Name and string.find(Data.FullName,Name) then StaticFindObjectAlgoFoundAddress=Data.Address break end
+  end
+end
+
+function StaticFindObjectAlgo(fullname,name)
+  fullname=fullname:lower()
+  if ue4parsetablecheck() then
+    FullNameList={}
+    ObjectLists={}
+    ObjectTable={}
+    HighestObjectID=0
+  end
+  if not FullNameList then
+    FullNameList={}
+    ObjectLists={}
+    ObjectTable={}
+    FullNameList={}
+    HighestObjectID=0
+  end
+  if FullNameList[fullname] then return FullNameList[fullname].Address end
+
+  local count=0x200
+  local sizess= UObjectMul*count
+  local ObjectId=UObject.ObjectId
+  local num,start,stop
+  totalobjects=0
+  local size,pointer=targetIs64Bit() and 8 or 4
+
+  for i=0,0x1000,size do
+    pointer=readPointer(GUObjectAddress+i)
+    if not readPointer(pointer) then break end
+    size=getregionsize(pointer)
+    num,start,stop=count,0,0
+    for j=0,math.floor(size/sizess) do
+      start=stop
+      stop=stop+num
+      --print(start..'~'..stop)
+
+      createThread(FindObject(pointer,start,stop-1,fullname,name))
+      if FullNameList[fullname] then return FullNameList[fullname].Address end
+    end
+  end
+  local address=StaticFindObjectAlgoFoundAddress
+  StaticFindObjectAlgoFoundAddress=nil
+  return address
+end
+
+function BasicObject(pointer,start,stop)
+  Threadlist[#Threadlist+1]=i
+  for j=start,stop do
+    SaveObject(readPointer(pointer+j*UObjectMul))
+  end
+  Threadlist[#Threadlist]=nil
+end
+totalproperties=0
+IgnoreList={}
+function BasicEnumObject()
+  --ue4parsetablecheck()
+  IgnoreList={}
+  ObjectLists={}
+  ObjectTable={}
+  Threadlist={}
+  FullNameList={}
+  HighestObjectID=0
+  starttime=os.clock()
+  local count=0x200
+  local sizess= UObjectMul*count
+  local ObjectId=UObject.ObjectId
+  local num,start,stop
+  totalobjects=0
+  totalproperties=0
+  local size,pointer=targetIs64Bit() and 8 or 4
+
+  for i=0,0x1000,size do
+    pointer=readPointer(GUObjectAddress+i)
+    if not readPointer(pointer) then break end
+    size=getregionsize(pointer)
+    num,start,stop=count,0,0
+    for j=0,math.floor(size/sizess) do
+      start=stop
+      stop=stop+num
+      --print(start..'~'..stop)
+      createThread(BasicObject(pointer,start,stop-1))
+    end
+  end
+  if UE4ver&gt;=23 and totalproperties&lt;100 and ue4versioncheck()&lt;2 then UE4ver=25 end
+  for i=0,10000 do
+    if #Threadlist==0 then break end
+    sleep(1)
+  end
+  BasicEnumObjectCooldown=true
+  createTimer(180000, function()BasicEnumObjectCooldown=nil end)
+  print(string.format('\nA Total of %u objects has been found in %.3f seconds',totalobjects,os.clock()-starttime))
+end
+
+function UperNameList(ObjectData,NameTable)
+  if not NameTable then NameTable={} end
+  if ObjectData.Name=='Object' then return NameTable end
+  for i=1,#NameTable do
+    if NameTable[i]==ObjectData.Name..'.' then return NameTable end
+  end
+
+  NameTable[#NameTable+1]=ObjectData.Name..'.'
+  if ObjectData.Uper then
+    for i=1,#ObjectData.Uper do
+      UperNameList(ObjectData.Uper[i],NameTable)
+    end
+  end
+  return NameTable
+end
+
+function registerMemberAlgo()
+  UEMember={}
+  UEMemberClassFullName={}
+  UEMemberStrTable={'{$lua}\nif syntaxcheck then return end\n[ENABLE]\nUEMember = { '}
+  local size,Super=HighestObjectID+10
+  for i=1,size do
+    if ObjectTable[i] and ObjectTable[i].Member then
+      Class=UperNameList(ObjectTable[i],{''})
+      Super=ObjectTable[i].Super
+      for k=0,5 do
+        if not Super or Super.Name=='Object' then break end
+        Class[#Class+1]=Super.Name..'.'
+        Super=Super.Super
+      end
+      registerMember(ObjectTable[i],ObjectTable[i].FullName)
+    end
+  end
+  Class=nil
+  UEMemberStrTable[#UEMemberStrTable]=UEMemberStrTable[#UEMemberStrTable]:sub(1,UEMemberStrTable[#UEMemberStrTable]:len()-1)
+  UEMemberStrTable[#UEMemberStrTable+1]='}\n[DISABLE]'
+  --[[
+  local rec=getAddressList().getMemoryRecordByDescription('UEMemberStr(DoNotTouch!)')
+  if not rec then rec=getAddressList().createMemoryRecord()end
+  rec.Type=vtAutoAssembler
+  rec.Description='UEMemberStr(DoNotTouch!)'
+  rec.Script=table.concat(UEMemberStrTable)]]
+end
+
+
+function registerMember(ObjectData,FullName,AddedName,AddedOffset)
+  local Name,Offset
+  if not AddedName then AddedName='' end
+  if not AddedOffset then AddedOffset=0 end
+  if ObjectData.Member then
+    for j=1,#ObjectData.Member do
+      if ObjectData.Member[j].Offset then
+        Offset=AddedOffset+ObjectData.Member[j].Offset
+        Name=ObjectData.Member[j].Name
+        if string.find(ObjectData.Type,'UserDefinedStruct') and string.find(Name,'_') then Name=Name:sub(1,string.find(Name,'_')-1)end
+        Name=AddedName..Name
+        for i=1,#Class do
+          if not UEMember[(Class[i]..Name):lower()] then
+            UEMember[(Class[i]..Name):lower()]=Offset
+            UEMemberStrTable[#UEMemberStrTable+1]=string.format("['%s']=%u,",(Class[i]..Name):lower(),Offset)
+            UEMemberClassFullName[(Class[i]..Name):lower()]=FullName
+          end
+          if ObjectData.Member[j].Bit and not UEMember[(Class[i]..Name..'.Bit'):lower()] then
+            UEMember[(Class[i]..Name..'.Bit'):lower()]=ObjectData.Member[j].Bit
+            UEMemberStrTable[#UEMemberStrTable+1]=string.format("['%s']=%u,",(Class[i]..Name..'.Bit'):lower(),ObjectData.Member[j].Bit)
+            UEMemberClassFullName[(Class[i]..Name..'.Bit'):lower()]=FullName
+          end
+        end
+        if string.find(ObjectData.Member[j].Type,'StructProperty') and ObjectData.Member[j].Property then registerMember(ObjectData.Member[j].Property[1],FullName,Name..'.',Offset)end
+      end
+    end
+  end
+end
+
+
+function GetName1(pointer)
+  local class=readPointer(pointer+UObject.Class)
+  if not class then return nil end
+  local typ=readQword(class+UObject.FNameIndex)
+  if not typ then return nil end
+  local name=readQword(pointer+UObject.FNameIndex)
+  typ=FNameStringAlgo(typ,true)
+  name=FNameStringAlgo(name,true)
+  return typ,name,readPointer(pointer+UObject.Outer),class
+end
+
+function GetName2(pointer)
+  if not readPointer(pointer) then return nil end
+  local typ=readQword(readPointer(pointer+8))
+  if not typ then return nil end
+  local name=readQword(pointer+0x28)
+  typ=FNameStringAlgo(typ,true)
+  name=FNameStringAlgo(name,true)
+  return typ,name,readPointer(pointer+0x10)
+end
+
+
+function SaveObject(pointer)
+   if not readPointer(pointer)then return nil end
+   if ObjectLists[pointer] then return ObjectLists[pointer] end
+   local objid=readInteger(pointer+UObject.ObjectId)
+   if not objid then return nil end
+
+   local UEver,typ,name,outer,class,super=UE4ver
+   if UEver&lt;25 then typ,name,outer,class=GetName1(pointer)
+   else typ,name,outer=GetName2(pointer)
+     if not typ or string.find(typ,'None') or not name or string.find(name,'None') then
+       typ,name,outer,class=GetName1(pointer)
+     end
+   end
+
+   if not typ or string.find(typ,'None') or not name or string.find(name,'None') then return nil end
+
+   local ObjectData,size,pointers,pointerss,Data={},targetIs64Bit() and 8 or 4
+
+   ObjectData.Outer= outer~=0 and outer or nil
+   ObjectData.Name=name
+   ObjectData.Type=typ
+   ObjectData.Address=pointer
+
+   if not ObjectData.Name then
+     --print(ObjectData.Address)
+     ObjectData.Name='InvalidName'
+   end
+   if ObjectTable[objid+1] and ( not string.find(typ,'Property') or UE4ver&lt;25 ) then return ObjectTable[objid+1] end
+
+   ObjectData.ObjectId=objid
+
+   if not readPointer(objid) and objid&lt;0xFFFFFFF and ( not string.find(typ,'Property') or UE4ver&lt;25 ) then
+     ObjectTable[objid+1]=ObjectData
+     if HighestObjectID&lt;objid then HighestObjectID=objid end
+   end
+
+   ObjectLists[pointer]=ObjectData
+
+   if not VFTableList then VFTableList={} end
+   if not VFTableList[readPointer(pointer)]then VFTableList[readPointer(pointer)]=readPointer(pointer) end
+
+   SaveObject(ObjectData.Outer)
+   local dataNew,str,dataOld=ObjectData,ObjectData.Name
+
+   for x=0,10 do
+     if not dataNew.Outer or not ObjectLists[dataNew.Outer] then break end
+     dataOld=dataNew
+     dataNew=ObjectLists[dataNew.Outer]
+     if (string.find(dataOld.Type,'Property') or string.find(dataOld.Type,'Function'))
+     and (not string.find(dataNew.Type,'Property') and not string.find(dataNew.Type,'Function'))
+     then
+       str=dataNew.Name..':'..str
+     else
+       str=dataNew.Name..'.'..str
+     end
+   end
+   ObjectData.FullName=str
+   FullNameList[str:lower()]=ObjectData
+   if class then
+     class=SaveObject(class)
+     if class then
+       if not class.Instance then class.Instance={}end
+       class.Instance[#class.Instance+1]=ObjectData
+       ObjectData.Class=class
+     end
+   end
+
+   totalobjects=totalobjects+1
+
+   if UObject.super then
+     super=readPointer(pointer+UObject.super)
+     ObjectData.Super= super~=0 and super or nil
+     if ObjectData.Super then ObjectData.Super=SaveObject(ObjectData.Super)end
+     if ObjectData.Super then
+       if not ObjectData.Super.Uper then ObjectData.Super.Uper={}end
+       ObjectData.Super.Uper[#ObjectData.Super.Uper+1]=ObjectData
+     end
+   end
+
+   if string.find(typ,'Property')then
+     if UEver&gt;=23 then totalproperties=totalproperties+1 end
+     if UObject.Offset and UObject.propsize and UObject.Property and UObject.bitmask then
+       ObjectData.Offset=readSmallInteger(pointer+UObject.Offset)
+       ObjectData.Propsize=readSmallInteger(pointer+UObject.propsize)
+       if string.find(typ,'StructProperty') or string.find(typ,'ObjectProperty') then
+         ObjectData.Property={SaveObject(readPointer(pointer+UObject.Property))}
+         if not ObjectData.Property[1] then ObjectData.Property=nil end
+       elseif string.find(typ,'MapProperty') or string.find(typ,'ArrayProperty') then
+         ObjectData.Property={SaveObject(readPointer(pointer+UObject.Property)),SaveObject(readPointer(pointer+UObject.Property+size))}
+         if not ObjectData.Property[1] then ObjectData.Property=nil end
+       elseif string.find(typ,'BoolProperty')then ObjectData.Bit=readBytes(pointer+UObject.bitmask,1) end
+     end
+   else
+     if UObject.member and UObject.nextmember then
+       local member=SaveObject(readPointer(pointer+UObject.member))
+       if member and (string.find(member.Type,'Function') or string.find(member.Type,'Property')) then
+         ObjectData.Membersize=readInteger(pointer+UObject.member+size)
+         LastObjectWithMember=ObjectData
+         ObjectData.Member={member}
+         for i=0,0x1000 do
+           member=SaveObject(readPointer(member.Address+UObject.nextmember))
+           if not member then break end
+           if not string.find(member.Type,'Function') then ObjectData.Member[#ObjectData.Member+1]=member end
+         end
+       end
+     end
+   end
+
+   if string.find(typ,'Function')then
+     if not UObject.funct then
+       print(typ..' '..str..string.format(' = %X',pointer))
+       for i=UObject.ObjectId,0x100,4 do
+         if inModule(readPointer(pointer+i)) then UObject.funct=i break end
+       end
+     end
+     if UObject.funct then
+       if not UE_function then
+         UE_function=createSymbolList()
+         UE_function.register()
+       end
+       pointer=readPointer(ObjectData.Address+UObject.funct)
+       if readPointer(pointer) then UE_function.addSymbol('UE_function',ObjectData.FullName,pointer,1)end
+     end
+   end
+
+   if (not UObject.enumoffset or not UObject.enumname or not UObject.enumindex or not UObject.enummul) and string.find(name,'EInterpCurveMode') and not IgnoreList[pointer] then
+     IgnoreList[pointer]=true
+     print(string.format('EInterpCurveMode = %X\n',pointer))
+     for j=UObject.Outer+size,0x100,4 do
+       pointers=readPointer(pointer+j)
+       if readPointer(pointers) and checkvalue(pointers,0x50,'CIM_Linear',1) then
+         UObject.enumoffset=j
+         print(string.format('EInterpCurveMode enums = %X\n',pointers))
+         if UEver&gt;=7 then
+           UObject.enumname=checkvalue(pointers,0x50,'CIM_Linear',1)-pointers
+           UObject.enumindex=checkvalue(pointers,0x50,1,2) and checkvalue(pointers,0x50,1,2)-checkvalue(pointers,0x50,'CIM_CurveAuto',1) or 4
+           for k=UObject.enumname+8,0x50,4 do
+             if readInteger(pointers+k)&gt;4 and FNameStringAlgo(readInteger(pointers+k),true) then UObject.enummul=k break end
+           end
+         else
+           UObject.enumname=0
+           UObject.enumindex=4
+           UObject.enummul=8
+         end
+       end
+     end
+   end
+
+   if string.find(ObjectData.Type,'EnumProperty') then
+     if not UObject.enumprop and not IgnoreList[pointer] then
+       IgnoreList[pointer]=true
+       print(string.format('%016X:%s %s',ObjectData.Address,ObjectData.Type,ObjectData.FullName))
+       for i=UObject.Offset+4,UObject.Offset+4+0x100,4 do
+         if SaveObject(readPointer(ObjectData.Address+i)) and (SaveObject(readPointer(ObjectData.Address+i)).Type=='Enum' or SaveObject(readPointer(ObjectData.Address+i)).Type=='UserDefinedEnum') then
+           UObject.enumprop=i
+           break
+         end
+       end
+     end
+     if UObject.enumprop then ObjectData.EnumProp = SaveObject(readPointer(ObjectData.Address+UObject.enumprop))end
+   end
+
+   return ObjectData
+end
+
+function isStructExist(name)
+  for i=1,#StructList do
+    if StructList[i].Name==name then return StructList[i] end
+  end
+  return nil
+end
+
+function SaveAndRemoveStruct()
+  StructList={}
+  local count=getStructureCount()
+  for i=count-1,0,-1 do
+    local struct=getStructure(i)
+    StructList[i+1]=struct
+    struct:removeFromGlobalStructureList()
+  end
+end
+
+function ValidateFNamePool(pointer)
+  local flag2,pointers=false
+  if not pointer or pointer%4~=0 then return false end
+  print(string.format('%X',pointer))
+  for m=0,0x10,4 do
+    if readPointer(pointer) then
+      pointers=readPointer(pointer+m)
+      if readPointer(pointers)then
+        for n=0,2 do
+          if not pointers then break end
+          if readPointer(pointers) then
+            for o=0,0x30,2 do
+              if string.find(readString(pointers+o),'None') then
+                unregisterSymbol('FNamePool') registerSymbol('FNamePool',pointer,true) flag2=true
+                break
+              end
+            end
+          end
+          pointers=readPointer(pointers)
+        end
+      end
+      if flag2 then break end
+    end
+    if flag2 then break end
+  end
+  return flag2
+end
+
+
+function DeleteStruct(Struct)
+  local count=#StructList
+  for i=1,count do
+    if Struct==StructList[i] then
+      Struct:Destroy()
+      StructList[i]=nil
+    end
+    if not StructList[i] and StructList[i+1] then
+      StructList[i]=StructList[i+1]
+      StructList[i+1]=nil
+    end
+  end
+end
+
+function LoadStruct()
+  for i=1,#StructList do
+    StructList[i]:addToGlobalStructureList()
+  end
+end
+
+function getEnumStr(fullname)
+  local Address,size,EnumStr,EnumTable,list=StaticFindObjectAlgo(fullname),targetIs64Bit() and 8 or 4,'',{}
+  if not Address then return nil end
+  list=Address+UObject.enumoffset
+  for k=0,readInteger(list+size)-1 do
+    pointers=readPointer(list)+k*UObject.enummul
+    offset=readBytes(pointers+UObject.enumindex,1)
+    if not offset then break end
+    if offset==0 then offset=k end
+    propname=FNameStringAlgo(pointers+UObject.enumname)
+    if string.find(propname,'::') then propname=propname:sub(string.find(propname,'::')+2,propname:len())end
+    EnumStr=EnumStr..string.format('%u:%s\n',offset,propname)
+    EnumTable[offset]=propname
+  end
+  return EnumStr,EnumTable
+end
+
+function ChildStructStart(structname,elementname)
+local struct=isStructExist(structname)
+if struct then
+for i=0,struct.Count-1 do
+if struct.Element[i].Name==elementname then return struct.Element[i].ChildStructStart end end
+else return nil end
+end
+
+function sigscan(value,modulename,stopaddress)
+  local ms = createMemScan()
+  modulename,stopaddress=startstop(modulename,stopaddress)
+  ms.firstScan(soExactValue,vtByteArray,rtTruncated,value,'',modulename,stopaddress,'',fsmNotAligned,'',true,false,false,false)
+  ms.waitTillDone()
+  local f = createFoundList(ms)
+  f.initialize()
+  ms.destroy()
+  local result={}
+  for i=0,f.Count-1 do result[i+1]=f[i] end
+  f.destroy()
+  return result
+end
+
+function findAddress(Symbol,number,Address,size)
+    Address=getAddressSafe(Address)
+    if not Address then return end
+    if not size then size=0x200 end
+	local addr,i,j={},0,1
+	while(i&lt;size) do
+		local ext, opc, byt, add=splitDisassembledString(disassemble(Address+i))
+		if ext~="" then
+			if(opc:find(",")~=nil)then opc=opc:sub(opc:find(",")+1,opc:len())
+			else opc=opc:sub(opc:find(" ")+1,opc:len())end
+            if string.find(opc,'%[') then opc=opc:sub(string.find(opc,'%[')+1,opc:len()-1)end
+            if tonumber(opc,16) then addr[j]=opc j=j+1 end
+        end
+		if opc:find('],') then
+            opc=opc:sub(opc:find("%[")+1,opc:find("]")-1)
+            if tonumber(opc,16) then addr[j]=opc j=j+1 end
+        end
+		i=i+getInstructionSize(Address+i)
+	end
+    if number&lt;=0 then return addr end
+	unregisterSymbol(Symbol)
+	registerSymbol(Symbol,getAddressSafe(addr[number]),true)
+end
+
+function checkvalue(address,size,value,typ,literal)
+  local cvalue,tempvalue,value2=readBytes(address,size,true)
+
+  if type(value)==type('') and string.find(value,'~') then
+    value2=tonumber(value:sub(string.find(value,'~')+1,value:len()))
+    value=tonumber(value:sub(1,string.find(value,'~')-1))
+  end
+
+  if not cvalue then return false end
+  if typ==1 then
+    for i=1,#cvalue,4 do
+      datatable={}
+      for m=1,4 do
+        datatable[m]=cvalue[m+i-1]
+      end
+      tempvalue=byteTableToDword(datatable)
+      --print(FNameStringAlgo(tempvalue,true))
+      local str=FNameStringAlgo(tempvalue,true)
+      if str and (not literal and string.find(str,value) or str==value) then
+        return address+i-1
+      end
+    end
+
+  elseif typ==2 then
+    for i=1,#cvalue,2 do
+      datatable={}
+      for m=1,2 do
+        datatable[m]=cvalue[m+i-1]
+      end
+      tempvalue=byteTableToWord(datatable)
+      if tempvalue==value or (value2 and tempvalue&gt;=value and tempvalue&lt;=value2 ) then return address+i-1 end
+    end
+  elseif typ==4 then
+    for i=1,#cvalue,4 do
+      datatable={}
+      for m=1,4 do
+        datatable[m]=cvalue[m+i-1]
+      end
+      tempvalue=byteTableToDword(datatable)
+      if tempvalue==value or (value2 and tempvalue&gt;=value and tempvalue&lt;=value2 ) then return address+i-1 end
+    end
+  elseif typ==8 then
+    for i=1,#cvalue,4 do
+      datatable={}
+      for m=1,8 do
+        datatable[m]=cvalue[m+i-1]
+      end
+      tempvalue=byteTableToQword(datatable)
+      if tempvalue==value or (value2 and tempvalue&gt;=value and tempvalue&lt;=value2 ) then return address+i-1 end
+    end
+  end
+  return nil
+end
+
+function fillstruct4bytes(Struct)
+  if not getElementByOffset(Struct,0) then local e=Struct.addElement() e.Offset=0 e.Vartype=vtDword end
+  Struct.beginUpdate()
+  local count=Struct.Count-1
+  local list,k,element1,element2,size,bytesize={},1
+  for i=0,count do
+    element1=Struct.Element[i]
+    element2=Struct.Element[i+1]
+    if element2 then
+      bytesize=element1.Bytesize
+      if bytesize&lt;4 then bytesize=4 end
+      size=element2.Offset-element1.Offset-bytesize
+      if size&gt;0 then
+        if size%4&gt;0 then size=4-size%4+size end
+        local start=element1.Offset
+        if start%4&gt;0 then start=4-start%4+start
+        else start=start+4 end
+        size=size/4
+        for j=0,size-1 do
+          if (start+j*4)&gt;=(element1.Offset+bytesize) then
+            list[k]=start+j*4
+            k=k+1
+          end
+        end
+      end
+    end
+  end
+  for i,v in ipairs(list) do local e=Struct.addElement() e.Offset=v e.Vartype=vtDword end
+  Struct.endUpdate()
+end
+
+function UECreateStruct(LocalStruct,ArrayStruct,ObjectData,Struct,Instance,AddedOffset,AddedName)
+
+  if AddedOffset then
+    if LocalStruct[ObjectData.FullName] then copyStruct(LocalStruct[ObjectData.FullName],Struct,AddedOffset,AddedName)
+    else
+      local copy=createStructure(ObjectData.FullName)
+      UECreateStruct(LocalStruct,ArrayStruct,ObjectData,copy,Instance)
+      LocalStruct[ObjectData.FullName]=copy
+      copyStruct(copy,Struct,AddedOffset,AddedName)
+    end
+    return
+  end
+
+
+  AddedOffset = AddedOffset and AddedOffset or 0
+  AddedName = AddedName and AddedName or ''
+  local size,MemberData,Propsize,e,f,Name,Offset,Typ=targetIs64Bit() and 8 or 4
+  for i=0,10 do
+    if ObjectData.Member then
+      print(ObjectData.Type..' '..ObjectData.FullName)
+      for j=1,#ObjectData.Member do
+        MemberData=ObjectData.Member[j]
+        if MemberData.Offset then
+          Offset=AddedOffset+MemberData.Offset
+          Propsize=MemberData.Propsize
+          Name=AddedName..MemberData.Name
+          Typ=MemberData.Type
+          if string.find(ObjectData.Type,'UserDefinedStruct') then Name=Name:sub(1,string.find(Name,'_')-1)end
+          if string.find(Typ,'StructProperty') and MemberData.Property and MemberData.Property[1] then
+            UECreateStruct(LocalStruct,ArrayStruct,MemberData.Property[1],Struct,Instance,Offset,Name..'.')
+            if not getElementByOffset(Struct,Offset) then e=Struct.addElement() e.Offset=Offset e.Name=Name e.Vartype=vtDword end
+          else
+            e=Struct.addElement()
+            e.Offset=Offset
+            e.Name=Name
+            if string.find(Typ,'BoolProperty') and MemberData.Bit then e.ChildStructStart=MemberData.Bit end
+
+            if Instance and string.find(Name,'RowStruct') then
+              local spointer=readPointer(Instance+Offset)
+              local sname,sstruct=SaveObject(spointer)
+              if sname then
+                print(sname.Type..' '..sname.FullName)
+
+                if not ArrayStruct then ArrayStruct={} end
+                if ArrayStruct[sname.Name] then sstruct=ArrayStruct[sname.Name]
+                else
+                  sstruct=createStructure(sname.Name)
+                  ArrayStruct[sname.Name]=sstruct
+                  UECreateStruct(LocalStruct,ArrayStruct,sname,sstruct,Instance,nil,nil)
+                end
+                f=Struct.addElement() f.Offset=e.Offset+8-sub f.Name='Table' f.Vartype=vtPointer
+                local ssstruct=createStructure('DataTable')
+                f.setChildStruct(ssstruct)
+                for r=0,10 do
+                  f=ssstruct.addElement() f.Offset=r*0x18 f.Name=string.format('[%u] FName',r)  f.Vartype=vtQword
+                  f=ssstruct.addElement() f.Offset=r*0x18+8 f.Name=string.format('[%u] Data',r) f.Vartype=vtPointer
+                  f.setChildStruct(sstruct)
+                end
+                fillstruct4bytes(ssstruct)
+
+                f=Struct.addElement() f.Offset=e.Offset+0x10-sub*2 f.Name='Size' f.Vartype=vtDword
+              end
+            end
+            if not ue4type[Typ] then e.Vartype=vtDword
+            else e.Vartype=ue4type[Typ] end
+            if (string.find(Typ,'ArrayProperty') or string.find(Typ,'MapProperty')) and MemberData.Property then
+              f=Struct.addElement() f.Offset=e.Offset+8-sub f.Name=e.Name..'_size' f.Vartype=vtDword
+              f=Struct.addElement() f.Offset=e.Offset+0xC-sub f.Name=e.Name..'_sizes' f.Vartype=vtDword
+              for m=e.Offset+0xC-sub+4,Propsize-1,4 do
+                if not getElementByOffset(Struct,m) then f=Struct.addElement() f.Offset=m f.Name=string.format('%s+%X',e.Name,m) f.Vartype=vtDword end
+              end
+              local isMap= string.find(Typ,'MapProperty')
+              if string.find(MemberData.Property[1].Type,'StructProperty') and MemberData.Property[1].Property and MemberData.Property[1].Property[1] then
+                Name= MemberData.Property[1].Property[1].Name..'[]'
+              else Name=MemberData.Property[1].Name..'[]'end
+              if not ArrayStruct then ArrayStruct={} end
+              if ArrayStruct[Name] then e.setChildStruct(ArrayStruct[Name])
+              else
+                local stru=createStructure(Name)
+                ArrayStruct[Name]=stru
+                e.setChildStruct(stru)
+                local ppsize=0
+                if isMap then
+                  for k=1,#MemberData.Property do
+                    ppsize=(MemberData.Property[k].Propsize&lt;4 and 4 or MemberData.Property[k].Propsize)+ppsize
+                  end
+                  ppsize=ppsize+0x8
+                  --print(ppsize)
+                end
+                for k=1,#MemberData.Property do
+                  local psize=isMap and ppsize or MemberData.Property[k].Propsize
+                  --print(MemberData.Address)
+                  local Offs=isMap and MemberData.Property[k].Offset and MemberData.Property[k].Offset or 0
+                  for p=0,10 do
+                    Offset=p*psize+Offs
+                    Name=string.format('[%u] ',p)
+                    Typ=MemberData.Property[k].Type
+                    if string.find(MemberData.Property[k].Type,'StructProperty') then
+                      UECreateStruct(LocalStruct,ArrayStruct,MemberData.Property[k].Property[1],stru,Instance,Offset,Name)
+                    else
+                      f=stru.addElement()
+                      f.Offset=Offset
+                      f.Name=Name..MemberData.Property[k].Name
+                      if not ue4type[Typ] then f.Vartype=vtDword
+                      else f.Vartype=ue4type[Typ]end
+                    end
+                  end
+                end
+                fillstruct4bytes(stru)
+              end
+            end
+          end
+        end
+      end
+    end
+    if not ObjectData.Super then break end
+    ObjectData=ObjectData.Super
+  end
+
+end
+
+
+function ue4createstruct(FullNameOrAddress,StructName,isGlobal,isfullname,Structu,AddedOffset,AddedName,Instance,name)
+  local ObjectData
+  if not FullNameOrAddress then return
+  elseif type(FullNameOrAddress)==type('')then
+    FullNameOrAddress=StaticFindObjectAlgo(FullNameOrAddress)
+    ObjectData=SaveObject(FullNameOrAddress)
+  elseif type(FullNameOrAddress)==type({})then ObjectData=FullNameOrAddress
+  elseif type(FullNameOrAddress)==type(0)then ObjectData=SaveObject(FullNameOrAddress) end
+  --print(ObjectData.FullName)
+  if not ObjectData then return end
+
+  StructName= StructName and StructName or ObjectData.Name
+
+  Struct=Structu and Structu or createStructure(StructName and StructName or ObjectData.Name)
+  local LocalStruct,ArrayStruct,e={},{}
+  Struct.beginUpdate()
+  UECreateStruct(LocalStruct,ArrayStruct,ObjectData,Struct,Instance,nil,nil)
+  Struct.endUpdate()
+  if not getElementByOffset(Struct,0) then e=Struct.addElement() e.Offset=0 e.Name='VTable' e.Vartype=vtPointer end
+  if not getElementByOffset(Struct,UObject.ObjectId) then e=Struct.addElement() e.Offset=UObject.ObjectId e.Name='ObjectIndex' e.Vartype=vtDword end
+  if not getElementByOffset(Struct,UObject.Class) then e=Struct.addElement() e.Offset=UObject.Class e.Name='Class/Type' e.Vartype=vtPointer end
+  if not getElementByOffset(Struct,UObject.FNameIndex) then e=Struct.addElement() e.Offset=UObject.FNameIndex e.Name='FNameIndex' e.Vartype=vtDword end
+  if not getElementByOffset(Struct,UObject.Outer) then e=Struct.addElement() e.Offset=UObject.Outer e.Name='Outer' e.Vartype=vtPointer end
+  if string.find(StructName,'Function') and UObject.funct then e=Struct.addElement() e.Offset=UObject.funct e.Name='Func' e.Vartype=vtPointer end
+--[[
+  if not Instance then fillstruct4bytes(Struct)
+  else
+    if not getElementByOffset(Struct,0) then Struct.autoGuess(Instance, 0, Struct.Element[0].Offset) end
+    local count=Struct.Count-1
+    local list,k,element1,element2,size,bytesize={},1
+    for i=0,count do
+      element1=Struct.Element[i]
+      element2=Struct.Element[i+1]
+      if element2 then
+        bytesize=element1.Bytesize
+        if bytesize&lt;4 then bytesize=4 end
+        size=element2.Offset-element1.Offset-bytesize
+        print(element1.Offset+bytesize)
+        print(size)
+        if size&gt;0 then
+          Struct.autoGuess(Instance,element1.Offset+bytesize,size)
+        end
+      end
+    end
+  end]]
+  fillstruct4bytes(Struct)
+  if isGlobal then StructList[#StructList+1]=Struct end
+  LoadStruct()
+  return Struct
+
+end
+
+function AutoConfig()
+  local flag1,flag2,size,val=false,false,targetIs64Bit() and 8 or 4,UE4ver&gt;7 and 1 or 4
+  local pointer,pointers,pointerss,Data=StaticFindObjectAlgo('/Script/Engine.GameEngine','Engine.GameEngine')
+  Data=SaveObject(pointer)
+  print(Data.Type..' '..Data.FullName..string.format(' = %X',pointer))
+  for i=UObject.Outer+size,0x100,4 do
+    pointers=readPointer(pointer+i)
+    Data=SaveObject(pointers)
+    if Data and string.find(Data.FullName,'Engine.Engine') and not flag1 then UObject.super=i flag1=true end
+    if Data and (string.find(Data.Type,'Property') or string.find(Data.Type,'Function')) and not string.find(Data.FullName,'Core') then
+      print(Data.Type..' '..Data.FullName..string.format(' = %X',pointer))
+      for j=size,0x100,4 do
+        pointerss=readPointer(pointers+j)
+        for k=0,val do
+          Data=SaveObject(pointerss)
+          if not Data or (not string.find(Data.Type,'Property') and not string.find(Data.Type,'Function')) or string.find(Data.FullName,'Core') then break end
+          print(Data.Type..' '..Data.FullName..string.format(' = %X',pointer))
+          if k==val then UObject.nextmember=j flag2=true end
+          pointerss=readPointer(pointerss+j)
+        end
+        if flag2 then break end
+      end
+      if flag2 then UObject.member=i end
+      if flag1 and flag2 then break end
+    end
+  end
+  local varsize={[0]=1,[2]=4,[3]=8,[4]=4,[12]=size}
+  pointerss=readPointer(UObject.nextmember+pointers)
+  for i=0,100 do
+    Data=SaveObject(pointerss)
+    if Data then
+      print(string.format('%X:%s %s',pointerss,Data.Type,Data.FullName))
+      if string.find(Data.Type,'ObjectProperty') then break end
+    end
+    pointerss=readPointer(UObject.nextmember+pointerss)
+  end
+  UObject.propsize=checkvalue(pointerss+UObject.Outer,0x100,varsize[ue4type[Data.Type]],2)-pointerss
+  for i=UObject.nextmember+size,0x100,size do
+    Data=SaveObject(readPointer(pointerss+i))
+    if Data and string.find(Data.Type,'Class') and not string.find(Data.FullName,'Core')  then UObject.Property=i break end
+  end
+  UObject.bitmask=UObject.Property+2
+  pointerss=readPointer(UObject.nextmember+pointers)
+  for i=0,100 do
+    Data=SaveObject(pointerss)
+    if Data then
+      print(string.format('%X:%s %s',pointerss,Data.Type,Data.FullName))
+      if string.find(Data.Type,'ObjectProperty') or string.find(Data.Type,'FloatProperty') then break end
+    end
+    pointerss=readPointer(UObject.nextmember+pointerss)
+  end
+  pointers=readPointer(UObject.nextmember+pointerss)
+  for i=UObject.nextmember+size,0x100,2 do
+    print(string.format('%X:',i)..readSmallInteger(pointerss+i)+varsize[ue4type[Data.Type]]..'=='..readSmallInteger(pointers+i))
+    if readSmallInteger(pointerss+i)+varsize[ue4type[Data.Type]]&gt;0x10 and readSmallInteger(pointerss+i)+varsize[ue4type[Data.Type]]==readSmallInteger(pointers+i)then UObject.Offset=i print(string.format('%X',UObject.Offset)) break end
+  end
+  print(string.format([[
+UObject.ObjectId = 0x%X
+UObject.Class = 0x%X
+UObject.FNameIndex = 0x%X
+UObject.Outer = 0x%X
+UObject.super = 0x%X
+UObject.member = 0x%X
+UObject.nextmember = 0x%X
+UObject.propsize = 0x%X
+UObject.Offset = 0x%X
+UObject.Property = 0x%X
+UObject.bitmask = 0x%X
+]],UObject.ObjectId,UObject.Class,UObject.FNameIndex,
+UObject.Outer,UObject.super,UObject.member,UObject.nextmember,
+UObject.propsize,UObject.Offset,UObject.Property,
+UObject.bitmask))
+
+end
+
+function getElementByOffset(struct,offset)
+  for i=0,struct.Count-1 do
+    if struct.Element[i].Offset==offset then return i end
+  end
+  return nil
+end
+
+function copyStruct(original,copy,AddedOffset,AddedName)
+  if not copy then copy=createStructure(original.Name..'_copy')end
+  if not AddedOffset then AddedOffset=0 end
+  if not AddedName then AddedName='' end
+  copy.beginUpdate()
+  for i=0,original.Count-1 do
+    local e=copy.addElement()
+    e.Offset=original.Element[i].Offset+AddedOffset
+    if original.Element[i].Name=='' then e.Name=original.Element[i].Name
+    else e.Name=AddedName..original.Element[i].Name end
+    e.Vartype=original.Element[i].Vartype
+    e.ChildStruct=original.Element[i].ChildStruct
+    e.ChildStructStart=original.Element[i].ChildStructStart
+    e.Bytesize=original.Element[i].Bytesize
+  end
+  copy.endUpdate()
+  return copy
+end
+
+function ue_structureDissectOverrideCallback(Struct, Instance)
+  local name,fullname,class
+  address,name,fullname,class=ue_findRealStartOfObject(Instance)
+
+  if class then
+   SaveAndRemoveStruct()
+    ue4createstruct(class,nil,nil,nil,Struct,nil,nil,Instance,name)
+    if Struct.Count&gt;1 then return true
+    else return false end
+  end
+
+  return nil
+end
+
+function ue_structureNameLookupCallback(address)
+  local name,fullname
+  address,name,fullname=ue_findRealStartOfObject(address)
+  if name then return name,address end
+  return nil
+end
+
+function ue_SymbolLookupCallback(symbol)
+  if UEMember[symbol:lower()] then return UEMember[symbol:lower()] end
+  local str='Function '
+  if string.find(symbol,str) then
+    symbol=symbol:sub(string.find(symbol,str)+str:len(),symbol:len())
+    local pointer=StaticFindObjectAlgo(symbol)
+    if pointer then return readPointer(pointer+UObject.funct)end
+  end
+  return nil
+end
+
+function ue_findRealStartOfObject(address)
+  local ObjectData,Membersize
+  ObjectData=SaveObject(address)
+  if ObjectData then return ObjectData.Address,ObjectData.Class.Name,ObjectData.Class.FullName,ObjectData.Class or nil end
+
+  for i=1,HighestObjectID+10 do
+    if ObjectTable[i] and ObjectTable[i].Class then
+      Membersize = (ObjectTable[i].Class.Membersize and ObjectTable[i].Class.Membersize&gt;0x100 and ObjectTable[i].Class.Membersize&lt;0x5000) and ObjectTable[i].Class.Membersize or 0x500
+      if address&gt;=ObjectTable[i].Address and address&lt;=ObjectTable[i].Address+Membersize then
+        ObjectData=ObjectTable[i]
+        return ObjectData.Address,ObjectData.Class.Name,ObjectData.Class.FullName,ObjectData.Class
+      end
+    end
+  end
+  return address
+end
+
+function findOpcodes(address,opcode,size)
+  if not size then size=0x50 end
+  address=getAddressSafe(address)
+  if not address then return nil end
+  local addr={}
+  local i=0
+  local j=1
+  while(i&lt;size) do
+    local ext, opc, byt, add=splitDisassembledString(disassemble(address+i))
+    if string.find(opc,opcode) then
+      addr[j]=address+i
+      j=j+1
+    end
+    i=i+getInstructionSize(address+i)
+  end
+  return addr
+end
+
+function findOpcode(address,opcode,size)
+  if not size then size=0x50 end
+  address=getAddressSafe(address)
+  if not address then return nil end
+  local i=0
+  while(i&lt;size) do
+    local ext, opc, byt, add=splitDisassembledString(disassemble(address+i))
+    if string.find(opc,opcode) then
+      return address+i
+    end
+    i=i+getInstructionSize(address+i)
+  end
+  return nil
+end
+
+function findLastCall(address,size)
+  if not size then size=0x1000 end
+  local result=findOpcode(address,'ret',size)
+  if not result then print(address..' cant find ret?') return nil end
+  result=result-getAddress(address)
+  result=findOpcodes(address,'call ',result)
+  local ext, opc, byt, add=splitDisassembledString(disassemble(result[#result]))
+  opc=opc:gsub('call ','')
+  return opc
+end
+
+function followjmp(address,size)
+  if not size then size=0x1000 end
+  local result=findOpcode(address,'jmp ',size)
+  if not result then print(address..' cant find jmp?') return nil end
+  local ext, opc, byt, add=splitDisassembledString(disassemble(result))
+  opc=opc:gsub('jmp ','')
+  return opc
+end
+
+function followcall(address,size)
+  if not size then size=0x1000 end
+  local result=findOpcode(address,'call ',size)
+  if not result then print(address..' cant find call?') return nil end
+  local ext, opc, byt, add=splitDisassembledString(disassemble(result))
+  opc=opc:gsub('call ','')
+  return opc
+end
+
+function startstop(modulename,stopaddress)
+  if(modulename==0 or modulename==nil or modulename=='')then modulename=0 stopaddress=0x00007fffffffffff end
+  if type(modulename)==type(0) then modulename=string.format('%X',modulename)
+  elseif type(modulename)==type('') then modulename=[["]]..modulename..[["]]  end
+  if(stopaddress==0 or stopaddress==nil or stopaddress=='')then
+    stopaddress=getNameFromAddress(getAddress(modulename),true,false)
+    if(stopaddress:find("+")~=nil)then stopaddress=stopaddress:sub(0,stopaddress:find("+")-1)end
+	if(getModuleSize(stopaddress)==nil)then error('Module '..modulename..' not found') end
+    modulename=getAddress([["]]..stopaddress..[["]])
+	stopaddress=modulename+getModuleSize(stopaddress)
+    modulename=string.format('%X',modulename)
+  end
+  if type(stopaddress)==type(0) then stopaddress=string.format('%X',stopaddress)end
+  return modulename,stopaddress
+end
+
+function groupscan(value,modulename,stopaddress)
+  local ms = createMemScan()
+  modulename,stopaddress=startstop(modulename,stopaddress)
+  ms.firstScan(soExactValue,vtGrouped,rtTruncated,value,'',modulename,stopaddress,'',fsmNotAligned,'',false,false,false,false)
+  ms.waitTillDone()
+  local f = createFoundList(ms)
+  f.initialize()
+  ms.destroy()
+  local result={}
+  for i=0,f.Count-1 do result[i+1]=f[i] end
+  f.destroy()
+  return result
+end
+
+function pointerscan(value,modulename,stopaddress,value2)
+  local ms = createMemScan()
+  modulename,stopaddress=startstop(modulename,stopaddress)
+  print(modulename..'~'..stopaddress)
+  if value2 then ms.firstScan(soValueBetween,targetIs64Bit() and vtQword or vtDword,rtTruncated,value,value2,modulename,stopaddress,'',fsmNotAligned,'',false,false,false,false)
+  else ms.firstScan(soExactValue,targetIs64Bit() and vtQword or vtDword,rtTruncated,value,value2,modulename,stopaddress,'',fsmNotAligned,'',false,false,false,false)end
+  ms.waitTillDone()
+  local f = createFoundList(ms)
+  f.initialize()
+  ms.destroy()
+  local result={}
+  for i=0,f.Count-1 do result[i+1]=f[i] end
+  f.destroy()
+  return result
+end
+
+function stringscan(value,modulename,stopaddress,isUnicode)
+  local ms = createMemScan()
+  modulename,stopaddress=startstop(modulename,stopaddress)
+  ms.firstScan(soExactValue,vtString,rtTruncated,value,'',modulename,stopaddress,'',fsmNotAligned,'',false,false,isUnicode,true)
+  ms.waitTillDone()
+  local f = createFoundList(ms)
+  f.initialize()
+  ms.destroy()
+  local result={}
+  for i=0,f.Count-1 do result[i+1]=f[i] end
+  f.destroy()
+  return result
+end
+
+function StructAddToListSymbol(StructName,StartOffset,StopOffset,BaseAddress,OffsetOnly)
+  if not StartOffset then StartOffset=0 end
+  if not StopOffset then StopOffset=0xFFFFFF end
+  local structCount=getStructureCount()
+  local struct
+  for i=0,structCount-1 do
+    local stru=getStructure(i)
+    if stru.Name==StructName then struct=stru break end
+  end
+  if struct then
+    for i=0,struct.Count-1 do
+      local e=struct.Element[i]
+      if e.Offset&gt;=StartOffset and e.Offset&lt;=StopOffset then
+        local rec=getAddressList().createMemoryRecord()
+        rec.setDescription(e.Name)
+        if OffsetOnly then
+          if BaseAddress then rec.setAddress(BaseAddress) rec.OffsetCount=1 rec.Offset[0]=e.Offset
+          else rec.setAddress(string.format('+%X',e.Offset))end
+        else
+          if BaseAddress then rec.setAddress(BaseAddress) rec.OffsetCount=1 rec.OffsetText[0]=StructName..'.'..e.Name
+          else rec.setAddress(string.format('+%s.%s',StructName,e.Name))end
+        end
+        rec.Type=e.Vartype
+      end
+    end
+  end
+end
+
+function getInsForJump(address,registername,destination,allocsize,SharedMemoryName)
+  address = getAddressSafe(address)
+  if not address then error('getInsForJump address nil') return end
+  if not allocsize then allocsize=4096 end
+  destination=getAddressSafe(destination)
+  if not destination then
+	if not SharedMemoryName then destination = allocateMemory(allocsize,address)
+	else destination = allocateSharedMemory(SharedMemoryName,allocsize) end
+  end
+  local size = (address+5-destination&gt;0x7FFFFFFF) and 14 or 5
+  if registername then
+	unregisterSymbol(registername)
+	registerSymbol(registername,destination,true)
+  end
+  local opcodes = {}
+  local i = 0
+  while(i&lt;size) do
+    local ext, opc=splitDisassembledString(disassemble(address+i))
+    opcodes[#opcodes+1] = opc
+    i=i+getInstructionSize(address+i)
+  end
+  local copy = table.concat(opcodes,'\r\n')
+  local readAsTable = true
+  local byt = readBytes(address,i,readAsTable)
+  for j=1,#byt do byt[j] = ('%02X'):format(byt[j]) end
+  local bytes = table.concat(byt, ' ')
+  return i,copy,bytes,size,destination
+end
+
+function enablescript(name,registername,addressname,script,disable)
+    local address=getAddress(addressname)
+    if disable then script=(script):format(address,registername,readBytes(registername,1))
+    else
+        local i,copy,bytes,size =getInsForJump(address,name)
+        script=(script):format(registername, registername, name, copy, registername, i, bytes, address)..string.rep('nop\n',i-size)..'returnhere:'
+    end
+    local success,erro=autoAssembleCheck(script)
+    if not success then print('\n'..erro..'\n')local scriptstr=createStringlist()scriptstr.Text=script for j=0,scriptstr.Count-1 do print(string.format('%u\t%s',j+1,scriptstr[j])) end
+    if not disable then deAlloc(name)unregisterSymbol(name)end error(name..' autoAssemble failed')end
+    autoAssemble(script)
+    if disable then deAlloc(name)unregisterSymbol(name)unregisterSymbol(registername)end
+end
+
+function cycleFullCompact(sender,force)
+  local state = not(compactmenuitem.Caption == 'Compact View Mode')
+  if force~=nil then state = not force end
+  compactmenuitem.Caption = state and 'Compact View Mode' or 'Full View Mode'
+  getMainForm().Splitter1.Visible = state
+  getMainForm().Panel4.Visible = state
+  getMainForm().Panel5.Visible = state
+end
+
+function addCompactMenu()
+  if compactmenualreadyexists then return end
+  local parent = getMainForm().Menu.Items
+  compactmenuitem = createMenuItem(parent)
+  parent.add(compactmenuitem)
+  compactmenuitem.Caption = 'Compact View Mode'
+  compactmenuitem.OnClick = cycleFullCompact
+  compactmenualreadyexists = 'yes'
+end
+
+addCompactMenu()
+--cycleFullCompact(nil,true)
+
+if syntaxcheck then return end
+
+[ENABLE]
+if not process or not enumModules()[1] then print('Error: No process selected...') error('process is nil') end
+starttime=os.clock()
+if string.find(process,'MassEffect') then
+  isMassEffect=true
+
+  local result2,result=sigscan('C0 CA 45 80 00 00 00 00 00 00 00 00 4E 6F 6E 65 00',process)
+  for i=1,#result2 do
+    result=pointerscan(getAddress(result2[i]),process)
+    for j=1,#result do
+      stringoffset=0xC
+      unregisterSymbol('FNamePool') registerSymbol('FNamePool',result[j],true)
+    end
+  end
+  local rec=getAddressList().getMemoryRecordByDescription('UE3 Object scanner')
+  if rec then
+    rec.Active=true
+    while rec.AsyncProcessing do sleep(100) end
+  end
+  else isMassEffect=nil
+end
+
+if not UEMember or type(UEMember)~=type({}) then UEMember={}end
+
+if not UE4ver then UE4ver=ue4versioncheck() end
+
+local flag1,flag2,address,result1,result2,pointer,pointers,rec=false,false
+if not readPointer('GUObjectArray') then
+
+    local ObjectAOB={'44 8B * * * 48 8D 05 * * * * * * * * * 48 89 71 10'
+    ,'40 53 48 83 EC 20 48 8B D9 48 85 D2 74 * 8B'
+    ,'4C 8B 05 * * * * 45 3B 88'
+    ,'4C 8B 44 24 60 8B 44 24 78 * * * 48 8D','8B 44 24 04 56 8B F1 85 C0 74 17 8B 40 08'
+    ,'8B 44 24 04 56 8B F1 85 C0 74 17 8B 40 08'
+    ,'8B 15 * * * * 8B 04 82 85'
+    }
+    for i=1,#ObjectAOB do
+      result1=sigscan(ObjectAOB[i],process)
+      for j=1,#result1 do
+        print(i..':i'..':'..result1[j])
+        result2=findAddress('GUObjectArray',0,result1[j],0x50)
+        for k=1,#result2 do
+          pointer=getAddress(result2[k])-0x70
+          print(i..':j'..':'..result2[k])
+          for m=0,0x100,4 do
+            if readPointer(readPointer(readPointer(pointer+m))) then
+              if m&gt;0x50 then unregisterSymbol('GUObjectArray') registerSymbol('GUObjectArray',result2[k],true)
+              else unregisterSymbol('GUObjectArray') registerSymbol('GUObjectArray',result2[k]..'-68',true) end
+              flag1=true break
+            end
+          end
+          if flag1 then break end
+        end
+        if flag1 then break end
+      end
+      if flag1 then break end
+    end
+    if flag1 then print(string.format('GUObjectArray = %X',getAddress('GUObjectArray')))
+    else print('GUObjectArray not found, running scanner...') end
+    flag1 = not flag1
+
+    if not flag1 and ue4versioncheck()&lt;=2 and targetIs64Bit() and UE4ver&lt;23 then
+      if readInteger('GUObjectArray+24')==0xFFFFFFFF then UE4ver=18
+      elseif readInteger('GUObjectArray+14')==0 then UE4ver=9
+      else UE4ver=20 end
+    end
+end
+if not readPointer('FNamePool') then
+    if string.find(process,'StateOfDecay2')then
+      findAddress('FNamePool',1,sigscan('48 8D * * * * * 8B * * 85 * 74 * 8D',process)[1])
+      findAddress('FNamePool2',3,sigscan('48 8D * * * * * 8B * * 85 * 74 * 8D',process)[1])
+      FNamePool=getAddress('FNamePool')
+      FNamePool2=getAddress('FNamePool2')
+      flag2=true
+    end
+
+    local NamePoolAOB={'4C 8D 05 * * * * EB 16 48 8D 0D * * * * E8'
+    ,'48 8D 0D *  *  *  *  E8 *  *  *  *  *  8B *  C6'
+    ,'48 83 EC 28 48 8B 05 *  *  *  *  48 85 C0 75 *  B9 *  *  00 00 48 89 5C 24 20 E8'
+    ,'48 83 EC 28 48 8B 05 *  *  *  *  48 85 C0 75 *  B9 *  *  00 00 48 89 5C 24 20 E8'
+    ,'C3 *  DB 48 89 1D *  *  *  *  *  *  48 8B 5C 24 20'
+    ,'33 F6 89 35 * * * * 8B C6 5E'
+    ,'8B 07 8B 0D * * * * 8B 04 81'}
+    for i=(UE4ver&gt;=23 or ue4versioncheck()&lt;2) and 1 or 3,#NamePoolAOB do
+      result1=sigscan(NamePoolAOB[i],process)
+      for j=1,#result1 do
+        print(i..':i'..':'..result1[j])
+        result2=findAddress('GUObjectArray',0,result1[j],0x50)
+        for k=1,#result2 do
+          print(i..':j'..':'..result2[k])
+          pointer=getAddress(result2[k])
+          flag2=ValidateFNamePool(pointer)
+          if flag2 then UE4ver=ue4versioncheck()==0 and (i&gt;2 and 18 or 23) or UE4ver break end
+        end
+        if flag2 then break end
+      end
+      if flag2 then break end
+    end
+    if flag2 then print(string.format('FNamePool = %X',getAddress('FNamePool')))
+    else print('FNamePool not found, running scanner...') end
+    flag2 = not flag2
+
+end
+
+if flag2 then
+  local FNamePoolScanner={'FNamePool scanner V4 (BatmanAk)','FNamePool scanner V2 (Generic)','FNamePool scanner V3 (Unicode)'}
+  unregisterSymbol('FNamePool')
+  UE4ver=ue4versioncheck()
+  for i=(string.find(process,'Batman') and 1 or 2),#FNamePoolScanner do
+    rec=getAddressList().getMemoryRecordByDescription(FNamePoolScanner[i])
+    if rec then
+      rec.Active=true
+      while rec.AsyncProcessing do sleep(100) end
+    end
+    if readPointer('FNamePool') then break end
+  end
+  if not readPointer('FNamePool') then error('FNamePool not found!')end
+end
+
+if flag1 then
+  local ObjectScanner={'UE4 Object scanner (region)','UE4 Object scanner','UE4 Object scanner V2'
+  ,'UE3 Namepool &amp; ObjectArray scanner (using string reference)','UE3 Object scanner'}
+  unregisterSymbol('GUObjectArray')
+  print(UE4ver)
+  for i=(UE4ver&gt;7 or ue4versioncheck()&lt;=0) and 1 or 4,#ObjectScanner do
+    rec=getAddressList().getMemoryRecordByDescription(ObjectScanner[i])
+    if rec then
+      rec.Active=true
+      while rec.AsyncProcessing do sleep(100) end
+    end
+    if readPointer('GUObjectArray') then break end
+  end
+  if not readPointer('GUObjectArray') then error('GUObjectArray not found!')end
+end
+
+print('AOBScan done : '..os.clock()-starttime)
+
+ue4parsetable()
+
+FNameStringAlgo(1,true)
+FNameStringAlgo(3,true)
+if not stringoffset then print('error: stringoffset/ByteProperty not found') error() end
+
+ue4config()
+ue4parsetable()
+if UE4ver==23 and ue4versioncheck()==0 then BasicEnumObject() end
+AutoConfig()
+
+--[[
+if ue4versioncheck()==0 and UE4ver&gt;=25 then
+  ue4config()
+  ue4parsetable()
+  BasicEnumObject()
+end]]
+
+print('Table parsing done : '..os.clock()-starttime)
+
+rec=getAddressList().getMemoryRecordByDescription('UEMemberStr(DoNotTouch!)')
+if rec then rec.Active=true end
+
+BasicEnumObject()
+registerMemberAlgo()
+
+rec=getAddressList().getMemoryRecordByDescription('Get GEngine')
+  if rec then
+  rec.Active=true
+  while rec.AsyncProcessing do sleep(100) end
+end
+
+
+print('All done : '..os.clock()-starttime..'\n')
+if not ue_SymbolLookupCallbackID then
+  ue_SymbolLookupCallbackID=registerSymbolLookupCallback(ue_SymbolLookupCallback,slNotSymbol)
+end
+--registerFuncAlgo()
+GetLuaEngine().close()
+[DISABLE]
+--cycleFullCompact(nil,false)
+unregisterSymbolLookupCallback(ue_SymbolLookupCallbackID)
+ue_SymbolLookupCallbackID=nil
+</AssemblerScript>
+      <CheatEntries>
+        <CheatEntry>
+          <ID>26076</ID>
+          <Description>"Enable UE Structure Lookup "</Description>
+          <LastState/>
+          <VariableType>Auto Assembler Script</VariableType>
+          <AssemblerScript Async="1">{$lua}
+if syntaxcheck then return end
+[ENABLE]
+if not ue_structureDissectOverrideCallbackID then
+  ue_structureDissectOverrideCallbackID=registerStructureDissectOverride(ue_structureDissectOverrideCallback)
+end
+if not ue_structureNameLookupCallbackID then
+  ue_structureNameLookupCallbackID=registerStructureNameLookup(ue_structureNameLookupCallback)
+end
+
+[DISABLE]
+unregisterStructureDissectOverride(ue_structureDissectOverrideCallbackID)
+unregisterStructureNameLookup(ue_structureNameLookupCallbackID)
+ue_structureDissectOverrideCallbackID=nil
+ue_structureNameLookupCallbackID=nil
+</AssemblerScript>
+        </CheatEntry>
+        <CheatEntry>
+          <ID>26116</ID>
+          <Description>"Refresh ObjectList"</Description>
+          <LastState/>
+          <VariableType>Auto Assembler Script</VariableType>
+          <AssemblerScript Async="1">{$lua}
+if syntaxcheck then return end
+[ENABLE]
+BasicEnumObject()
+
+[DISABLE]
+</AssemblerScript>
+        </CheatEntry>
+        <CheatEntry>
+          <ID>26117</ID>
+          <Description>"Re-register Fields/Members 's Symbols"</Description>
+          <LastState/>
+          <VariableType>Auto Assembler Script</VariableType>
+          <AssemblerScript Async="1">{$lua}
+if syntaxcheck then return end
+[ENABLE]
+registerMemberAlgo()
+
+[DISABLE]
+</AssemblerScript>
+        </CheatEntry>
+        <CheatEntry>
+          <ID>26115</ID>
+          <Description>"UE Object Dumper Algo"</Description>
+          <LastState/>
+          <VariableType>Auto Assembler Script</VariableType>
+          <AssemblerScript Async="1">{$lua}
+if syntaxcheck then return end
+[ENABLE]
+
+starttime=os.clock()
+
+totalobject=0
+local Path = 'C:\\Users\\'..os.getenv('USERNAME')..'\\Desktop\\'
+local filename= string.format('[%s] ObjectsDump.txt',process)
+local file,err = io.open(Path..filename, 'w')
+assert(file,err)
+print(Path..filename)
+file:write(string.format('Process: %s\nUE version: %.2f\nTimeStamp: %s\n\n',process,UE4ver,os.date()))
+local size,sizes,pointer,datatable,pointers,propname,offset,list,str,strid,name,objid,ObjectData=targetIs64Bit() and 8 or 4,HighestObjectID+10
+for i=1,sizes do
+  if ObjectTable[i] then
+    ObjectData=ObjectTable[i]
+    totalobject=totalobject+1
+    str=string.format('%016X',ObjectData.Address)
+    strid=string.format('%08u',ObjectData.ObjectId)
+    name=ObjectData.Type..' '..ObjectData.FullName
+    if ObjectData.Offset then
+      strid=string.format('%8X',ObjectData.Offset)
+    elseif ObjectData.Super and ObjectData.Super.Name~='Object' then
+      name=string.format('%s ~ %s %s',name,ObjectData.Super.Type,ObjectData.Super.FullName)
+    end
+    if ObjectData.Property and #ObjectData.Property==1 then
+      name=string.format('%s ~ %s %s',name,ObjectData.Property[1].Type,ObjectData.Property[1].FullName)
+    end
+    if ObjectData.EnumProp then
+      name=string.format('%s ~ %s %s',name,ObjectData.EnumProp.Type,ObjectData.EnumProp.FullName)
+    end
+
+    file:write(string.format('[%s] %s %s\n',strid,str,name))
+
+    if ObjectData.Property and #ObjectData.Property==2 then
+      for j=1,2 do
+        name=string.format('%s %s',ObjectData.Property[j].Type,ObjectData.Property[j].FullName)
+        if ObjectData.Property[j].Property and ObjectData.Property[j].Property[1] then
+          name=string.format('%s ~ %s %s',name,ObjectData.Property[j].Property[1].Type,ObjectData.Property[j].Property[1].FullName)
+        end
+        if ObjectData.Property[j].EnumProp then
+          name=string.format('%s ~ %s %s',name,ObjectData.Property[j].EnumProp.Type,ObjectData.Property[j].EnumProp.FullName)
+        end
+        file:write(string.format('[%8X] %016X %s\n',readInteger(ObjectData.Property[j].Address+UObject.Offset),ObjectData.Property[j].Address,name))
+      end
+    end
+
+    if UObject.enumoffset and UObject.enummul and UObject.enumindex and UObject.enumname then
+    if ObjectData.Type=='UserDefinedEnum' or ObjectData.Type=='Enum' then
+      list=ObjectData.Address+UObject.enumoffset
+      for k=0,readInteger(list+size)-1 do
+        pointers=readPointer(list)+k*UObject.enummul
+        offset=readBytes(pointers+UObject.enumindex,1)
+        if not offset then break end
+        if offset==0 then offset=k end
+        propname=FNameStringAlgo(pointers+UObject.enumname)
+        strid=string.format('%8X',offset)
+        str=string.format('%016X',pointers)
+        file:write(string.format('[%s] %s %s\n',strid,str,propname))
+      end
+    end
+    end
+
+    if ObjectData.Member and UE4ver&gt;=25 then
+      for m=1,#ObjectData.Member do
+        if not string.find(ObjectData.Member[m].Type,'Function')then
+
+        totalobject=totalobject+1
+
+        str=string.format('%016X',ObjectData.Member[m].Address)
+        strid=string.format('%08u',ObjectData.Member[m].ObjectId)
+        name=ObjectData.Member[m].Type..' '..ObjectData.Member[m].FullName
+        if ObjectData.Member[m].Offset then
+          strid=string.format('%8X',ObjectData.Member[m].Offset)
+        end
+        if ObjectData.Member[m].Property and #ObjectData.Member[m].Property==1 then
+          name=string.format('%s ~ %s %s',name,ObjectData.Member[m].Property[1].Type,ObjectData.Member[m].Property[1].FullName)
+        end
+        if ObjectData.Member[m].EnumProp then
+          name=string.format('%s ~ %s %s',name,ObjectData.Member[m].EnumProp.Type,ObjectData.Member[m].EnumProp.FullName)
+        end
+
+        file:write(string.format('[%s] %s %s\n',strid,str,name))
+
+        if ObjectData.Member[m].Property and #ObjectData.Member[m].Property==2 then
+        for j=1,2 do
+          name=string.format('%s %s',ObjectData.Member[m].Property[j].Type,ObjectData.Member[m].Property[j].FullName)
+          if ObjectData.Member[m].Property[j].Property and ObjectData.Member[m].Property[j].Property[1] then
+            name=string.format('%s ~ %s %s',name,ObjectData.Member[m].Property[j].Property[1].Type,ObjectData.Member[m].Property[j].Property[1].FullName)
+          end
+          if ObjectData.Member[m].Property[j].EnumProp then
+            name=string.format('%s ~ %s %s',name,ObjectData.Member[m].Property[j].EnumProp.Type,ObjectData.Member[m].Property[j].EnumProp.FullName)
+          end
+          file:write(string.format('[%8X] %016X %s\n',readInteger(ObjectData.Member[m].Property[j].Address+UObject.Offset),ObjectData.Member[m].Property[j].Address,name))
+        end
+        end
+    end
+
+
+
+      end
+    end
+
+  end
+end
+file:close()
+print(string.format('\nA Total of %u objects has been dumped in %.3f seconds',totalobject,os.clock()-starttime))
+
+shellExecute(Path..filename)
+
+[DISABLE]
+
+</AssemblerScript>
+        </CheatEntry>
+        <CheatEntry>
+          <ID>26122</ID>
+          <Description>"UE Object Dumper All Algo"</Description>
+          <LastState Activated="1"/>
+          <VariableType>Auto Assembler Script</VariableType>
+          <AssemblerScript Async="1">{$lua}
+function BasicObjectdump(pointerss,start,stop)
+
+  Threadlist[#Threadlist+1]=i
+  local size,sizes,pointer,datatable,pointers,propname,offset,list,str,strid,name,objid,ObjectData,pointersss=targetIs64Bit() and 8 or 4,HighestObjectID+10
+  for j=start,stop do
+    pointersss=readPointer(pointerss+j*UObjectMul)
+    ObjectData=SaveObject(pointersss)
+    if ObjectData then
+
+
+
+
+--for i=1,sizes do
+--  if ObjectTable[i] then
+    --ObjectData=ObjectTable[i]
+    totalobject=totalobject+1
+    str=string.format('%016X',ObjectData.Address)
+    strid=string.format('%08u',ObjectData.ObjectId)
+    name=ObjectData.Type..' '..ObjectData.FullName
+    if ObjectData.Offset then
+      strid=string.format('%8X',ObjectData.Offset)
+    elseif ObjectData.Super and ObjectData.Super.Name~='Object' then
+      name=string.format('%s ~ %s %s',name,ObjectData.Super.Type,ObjectData.Super.FullName)
+    end
+    if ObjectData.Property and #ObjectData.Property==1 then
+      name=string.format('%s ~ %s %s',name,ObjectData.Property[1].Type,ObjectData.Property[1].FullName)
+    end
+    if ObjectData.EnumProp then
+      name=string.format('%s ~ %s %s',name,ObjectData.EnumProp.Type,ObjectData.EnumProp.FullName)
+    end
+
+    file:write(string.format('[%s] %s %s\n',strid,str,name))
+
+    if ObjectData.Property and #ObjectData.Property==2 then
+      for j=1,2 do
+        name=string.format('%s %s',ObjectData.Property[j].Type,ObjectData.Property[j].FullName)
+        if ObjectData.Property[j].Property and ObjectData.Property[j].Property[1] then
+          name=string.format('%s ~ %s %s',name,ObjectData.Property[j].Property[1].Type,ObjectData.Property[j].Property[1].FullName)
+        end
+        if ObjectData.Property[j].EnumProp then
+          name=string.format('%s ~ %s %s',name,ObjectData.Property[j].EnumProp.Type,ObjectData.Property[j].EnumProp.FullName)
+        end
+        file:write(string.format('[%8X] %016X %s\n',readInteger(ObjectData.Property[j].Address+UObject.Offset),ObjectData.Property[j].Address,name))
+      end
+    end
+
+    if UObject.enumoffset and UObject.enummul and UObject.enumindex and UObject.enumname then
+    if ObjectData.Type=='UserDefinedEnum' or ObjectData.Type=='Enum' then
+      list=ObjectData.Address+UObject.enumoffset
+      for k=0,readInteger(list+size)-1 do
+        pointers=readPointer(list)+k*UObject.enummul
+        offset=readBytes(pointers+UObject.enumindex,1)
+        if not offset then break end
+        if offset==0 then offset=k end
+        propname=FNameStringAlgo(pointers+UObject.enumname)
+        strid=string.format('%8X',offset)
+        str=string.format('%016X',pointers)
+        file:write(string.format('[%s] %s %s\n',strid,str,propname))
+      end
+    end
+    end
+
+    if ObjectData.Member and UE4ver&gt;=25 then
+      for m=1,#ObjectData.Member do
+        if not string.find(ObjectData.Member[m].Type,'Function')then
+
+        totalobject=totalobject+1
+
+        str=string.format('%016X',ObjectData.Member[m].Address)
+        strid=string.format('%08u',ObjectData.Member[m].ObjectId)
+        name=ObjectData.Member[m].Type..' '..ObjectData.Member[m].FullName
+        if ObjectData.Member[m].Offset then
+          strid=string.format('%8X',ObjectData.Member[m].Offset)
+        end
+        if ObjectData.Member[m].Property and #ObjectData.Member[m].Property==1 then
+          name=string.format('%s ~ %s %s',name,ObjectData.Member[m].Property[1].Type,ObjectData.Member[m].Property[1].FullName)
+        end
+        if ObjectData.Member[m].EnumProp then
+          name=string.format('%s ~ %s %s',name,ObjectData.Member[m].EnumProp.Type,ObjectData.Member[m].EnumProp.FullName)
+        end
+
+        file:write(string.format('[%s] %s %s\n',strid,str,name))
+
+        if ObjectData.Member[m].Property and #ObjectData.Member[m].Property==2 then
+        for j=1,2 do
+          name=string.format('%s %s',ObjectData.Member[m].Property[j].Type,ObjectData.Member[m].Property[j].FullName)
+          if ObjectData.Member[m].Property[j].Property and ObjectData.Member[m].Property[j].Property[1] then
+            name=string.format('%s ~ %s %s',name,ObjectData.Member[m].Property[j].Property[1].Type,ObjectData.Member[m].Property[j].Property[1].FullName)
+          end
+          if ObjectData.Member[m].Property[j].EnumProp then
+            name=string.format('%s ~ %s %s',name,ObjectData.Member[m].Property[j].EnumProp.Type,ObjectData.Member[m].Property[j].EnumProp.FullName)
+          end
+          file:write(string.format('[%8X] %016X %s\n',readInteger(ObjectData.Member[m].Property[j].Address+UObject.Offset),ObjectData.Member[m].Property[j].Address,name))
+        end
+        end
+    end
+
+
+
+      end
+    end
+    elseif readPointer(readPointer(pointersss))then file:write(string.format('[%08u] %016X %s\n',readInteger(pointersss+UObject.ObjectId),pointersss,'invalid object')) totalobject=totalobject+1 end
+  end
+  Threadlist[#Threadlist]=nil
+end
+if syntaxcheck then return end
+[ENABLE]
+
+starttime=os.clock()
+
+totalobject=0
+local Path = 'C:\\Users\\'..os.getenv('USERNAME')..'\\Desktop\\'
+local filename= string.format('[%s] ObjectsDump.txt',process)
+file,err = io.open(Path..filename, 'w')
+assert(file,err)
+print(Path..filename)
+file:write(string.format('Process: %s\nUE version: %.2f\nTimeStamp: %s\n\n',process,UE4ver,os.date()))
+Threadlist={}
+
+local count=0x200
+  local sizess= UObjectMul*count
+  local ObjectId=UObject.ObjectId
+  local num,start,stop
+  local size,pointersss=targetIs64Bit() and 8 or 4
+
+  for i=0,0x1000,size do
+    pointersss=readPointer(GUObjectAddress+i)
+    if not readPointer(pointersss) then break end
+    size=getregionsize(pointersss)
+    num,start,stop=count,0,0
+    for j=0,math.floor(size/sizess) do
+      start=stop
+      stop=stop+num
+      --print(start..'~'..stop)
+      createThread(BasicObjectdump(pointersss,start,stop-1))
+    end
+  end
+  for i=0,10000 do
+    if #Threadlist==0 then break end
+    sleep(1)
+  end
+
+file:close()
+
+print(string.format('\nA Total of %u might be objects has been dumped in %.3f seconds',totalobject,os.clock()-starttime))
+
+shellExecute(Path..filename)
+
+
+
+--  end
+--end
+
+[DISABLE]
+
+</AssemblerScript>
+        </CheatEntry>
+        <CheatEntry>
+          <ID>26051</ID>
+          <Description>"UE Name Dumper Algo"</Description>
+          <LastState/>
+          <VariableType>Auto Assembler Script</VariableType>
+          <AssemblerScript Async="1">{$lua}
+if syntaxcheck then return end
+[ENABLE]
+function uenamedump(file,start,stop)
+  for i=start,stop do
+    local name=FNameStringAlgo(i,true)
+    if name and name:len()&lt;200 and name:len()&gt;3 and not string.find(name,'%c')  then
+      --print(name)
+      local strid=string.format('%08X',i)
+
+      file:write(string.format('[%s] %s\n',strid,name))
+      totalname=totalname+1
+    end
+  end
+end
+
+ local size
+ if readPointer(FNameString) or string.find(process,'StateOfDecay2')then size=0xFFFFFFFF
+ elseif UE4ver&gt;=23 then size=(#FNameDict&lt;&lt;0x10)-1
+ elseif UE4ver&gt;2 then size=(#FNameDict&lt;&lt;0xE)-1
+ else size=math.floor(#FNameDict[1]/4) end
+ local count=0x200
+ size=math.floor((size/count)+0.5)
+
+ starttime=os.clock()
+ local Path = 'C:\\Users\\'..os.getenv('USERNAME')..'\\Desktop\\'
+ local filename= string.format('[%s] NamesDump.txt',process)
+ local file,err = io.open(Path..filename, 'w')
+ assert(file,err)
+ file:write(string.format('Process: %s\nUE version: %.2f\nTimeStamp: %s\n\n',process,UE4ver,os.date()))
+ totalname=0
+ ue4parsetablecheck()
+ local num,start,stop=count,0,0
+ for i=0,size do
+   start=stop
+   stop=stop+num
+   createThread(uenamedump(file,start,stop-1))
+ end
+ file:close()
+ print(string.format('\nA Total of %u names had been dumped in %.3f seconds',totalname,os.clock()-starttime))
+ print(Path..filename)
+ shellExecute(Path..filename)
+[DISABLE]
+</AssemblerScript>
+        </CheatEntry>
+        <CheatEntry>
+          <ID>26081</ID>
+          <Description>"Construct Console"</Description>
+          <LastState/>
+          <VariableType>Auto Assembler Script</VariableType>
+          <AssemblerScript Async="1">{$lua}
+if syntaxcheck then return end
+[ENABLE]
+local result1=stringscan("NewObject with empty name can't be used to create default subobjects",process,nil,true)
+local result2,StaticConstructObject=findAddress('lea rdx',0,'48 8D 15banana',process,nil,0,true)
+for i=1,#result1 do
+  for j=1,#result2 do
+    if string.find(disassemble(result2[j]),result1[i])then
+      --print(result2[j])
+      local result3=findOpcodes(result2[j],'call',0x100)
+      for k=1,#result3 do
+        --print(string.format('%X',result3[k]))
+        local result4=followcall(result3[k])
+        if not string.find(result4,'ptr') then
+          print(result4)
+          result4=getAddress(result4)
+          if #findOpcodes(result4,'push',0x10)&gt;4 then
+            --print(string.format('%X',result4))
+            StaticConstructObject=result4
+            goto done
+          end
+        end
+      end
+    end
+  end
+end
+::done::
+if not StaticConstructObject then error('StaticConstructObject not found!')end
+unregisterSymbol('StaticConstructObject')
+registerSymbol('StaticConstructObject',StaticConstructObject,true)
+local Console=executeCodeEx
+(
+  0,nil,
+  getAddress(StaticConstructObject),
+  getAddress('[[GEngine]+GameEngine.ConsoleClass]'),
+  getAddress('[[GEngine]+GameEngine.GameViewport]'),
+  0,0,0,0,0,0,0
+)
+if not Console or Console==0 then error('Console not constructed, wrong function ?') end
+writePointer('[[GEngine]+GameEngine.GameViewport]+GameViewportClient.ViewportConsole',Console)
+print('Console constructed...')
+[DISABLE]
+--"NewObject with empty name can't be used to create default subobjects"
+</AssemblerScript>
+        </CheatEntry>
+        <CheatEntry>
+          <ID>26091</ID>
+          <Description>"Get GEngine"</Description>
+          <LastState Activated="1"/>
+          <VariableType>Auto Assembler Script</VariableType>
+          <AssemblerScript Async="1">{$lua}
+if syntaxcheck then return end
+[ENABLE]
+local Object=UE4ver&gt;7 and StaticFindObjectAlgo('/Script/Engine.GameEngine') or StaticFindObjectAlgo('Engine.GameEngine')
+if not Object then error('cant find Class GameEngine')end
+Object=ObjectLists[Object]
+for i=0,4 do
+  if Object.Uper and Object.Uper[1] then Object=Object.Uper[1] else break end
+end
+for i=1,#Object.Instance do
+  if not string.find(Object.Instance[i].Name,'Default') then Object=Object.Instance[i] break end
+end
+print(string.format('%X : %s %s',Object.Address,Object.Type,Object.FullName))
+unregisterSymbol('GEngine')
+registerSymbol('GEngine',pointerscan(Object.Address,process)[1],true)
+[DISABLE]
+</AssemblerScript>
+        </CheatEntry>
+        <CheatEntry>
+          <ID>26119</ID>
+          <Description>"Create Struct"</Description>
+          <LastState/>
+          <VariableType>Auto Assembler Script</VariableType>
+          <AssemblerScript>{$lua}
+if syntaxcheck then return end
+[ENABLE]
+local str,Address
+str=inputQuery('CreateStructure', 'Input FullName of Class or Address of Class', '/Script/Engine.GameEngine')
+if str and str~='' then
+  Address=getAddressSafe(str)
+  if not Address then  Address=StaticFindObjectAlgo(str)end
+  if Address then Address=SaveObject(Address)end
+  if not Address then error("Can't find "..str..', either invalid Object Address or invalid FullName')
+  else
+    SaveAndRemoveStruct()
+    local Struct=ue4createstruct(Address)
+    Struct.addToGlobalStructureList()
+    createStructureForm(nil,nil,Struct.Name)
+  end
+end
+[DISABLE]
+</AssemblerScript>
+        </CheatEntry>
+        <CheatEntry>
+          <ID>26118</ID>
+          <Description>"Print Fields/Members 's Classes used"</Description>
+          <LastState/>
+          <VariableType>Auto Assembler Script</VariableType>
+          <AssemblerScript>{$lua}
+if syntaxcheck then return end
+[ENABLE]
+local AddressList,str,strtable,FullName=getAddressList(),'{',{}
+for i=0,AddressList.Count-1 do
+  if AddressList[i].Address~='' then
+    FullName=AddressList[i].Address:gsub('+','')
+    FullName=UEMemberClassFullName[FullName:lower()]
+    if FullName and not strtable[FullName] then strtable[FullName]=FullName str=string.format("%s'%s',\n",str,FullName) end
+  end
+  for j=0,AddressList[i].OffsetCount-1 do
+    if AddressList[i].OffsetText[j]~='' then
+      FullName=AddressList[i].OffsetText[j]:gsub('+','')
+      FullName=UEMemberClassFullName[FullName:lower()]
+
+      if FullName and not strtable[FullName] then strtable[FullName]=FullName str=string.format("%s'%s',\n",str,FullName) end
+    end
+  end
+end
+
+print(str:sub(0,str:len()-2)..'}')
+
+[DISABLE]
+
+</AssemblerScript>
+        </CheatEntry>
+        <CheatEntry>
+          <ID>26040</ID>
+          <Description>"NoClip &amp; Fly                                            Numpad6 :Toggle, Space :Up, LeftCtrl :Down"</Description>
+          <Options moHideChildren="1" moDeactivateChildrenAsWell="1"/>
+          <LastState/>
+          <VariableType>Auto Assembler Script</VariableType>
+          <AssemblerScript>{$lua}
+if syntaxcheck then return end
+local str1='[[[[[[GEngine]+Engine.GameInstance]+GameInstance.LocalPlayers]]+Player.PlayerController]+Actor.Character]'
+[ENABLE]
+
+--[[
+Enum /Script/Engine.EMovementMode
+0:MOVE_None
+1:MOVE_Walking
+2:MOVE_NavWalking
+3:MOVE_Falling
+4:MOVE_Swimming
+5:MOVE_Flying
+6:MOVE_Custom
+7:MOVE_MAX
+
+local list=+0x40
+for i=0,readInteger(list+8)-1 do
+local pointer=readPointer(list)+i*0x10
+local enum=readInteger(pointer+8)
+local name=FNameString(pointer)
+print(enum..':'..name)
+end
+]]
+
+
+if not RelativeLocationZoffset then
+  local address=getAddress('['..str1..'+Character.CapsuleComponent]')
+  local value=readInteger(address+getAddress('ActorComponent.RelativeLocation+Vector.Z'))
+  local list=groupscan(string.format('4:%u',value),address,address+0x1000)
+  RelativeLocationZoffset={}
+  for i=1,#list do
+    RelativeLocationZoffset[i]=getAddress(list[i])-address
+  end
+end
+
+local address=getAddressSafe(str1..'+Actor.bActorEnableCollision')
+if address then
+local bActorEnableCollision=readBytes(address,1) &amp; ~ getAddress('Actor.bActorEnableCollision.Bit')
+writeBytes(address,bActorEnableCollision)
+end
+
+updown = createTimer()
+updown.Interval = 5
+updown.OnTimer = function(t)
+  local address=getAddressSafe('['..str1..'+Character.CapsuleComponent]')
+  if address then
+    if isKeyPressed(VK_SPACE) then
+      for i=1,#RelativeLocationZoffset do
+        writeFloat(address+RelativeLocationZoffset[i], readFloat(address+RelativeLocationZoffset[i])+20)
+      end
+    end
+    if isKeyPressed(VK_LCONTROL) then
+      for i=1,#RelativeLocationZoffset do
+        writeFloat(address+RelativeLocationZoffset[i], readFloat(address+RelativeLocationZoffset[i])-20)
+      end
+    end
+  end
+  local address=getAddressSafe('['..str1..'+Character.CharacterMovement]+MovementComponent.MovementMode')
+  if address then
+  writeBytes(address,5)
+  end
+end
+
+
+
+
+[DISABLE]
+updown.destroy()
+
+local address=getAddressSafe(str1..'+Actor.bActorEnableCollision')
+if address then
+local bActorEnableCollision=readBytes(address,1) | getAddress('Actor.bActorEnableCollision.Bit')
+writeBytes(address,bActorEnableCollision)
+end
+
+local address=getAddressSafe('['..str1..'+Character.CharacterMovement]+MovementComponent.MovementMode')
+if address then
+writeBytes(address,1)
+end
+</AssemblerScript>
+          <Hotkeys>
+            <Hotkey>
+              <Action>Toggle Activation</Action>
+              <Keys>
+                <Key>102</Key>
+              </Keys>
+              <ID>0</ID>
+            </Hotkey>
+          </Hotkeys>
+          <CheatEntries>
+            <CheatEntry>
+              <ID>26041</ID>
+              <Description>"WASD"</Description>
+              <LastState/>
+              <VariableType>Auto Assembler Script</VariableType>
+              <AssemblerScript>{$lua}
+if syntaxcheck then return end
+[ENABLE]
+wasd = createTimer()
+wasd.Interval = 5
+wasd.OnTimer = function(t)
+  local address=getAddressSafe('[[[[[[GEngine]+Engine.GameInstance]+GameInstance.LocalPlayers]]+Player.PlayerController]+Actor.Character]+Character.CapsuleComponent]')
+  if address then
+    if isKeyPressed(VK_S) then
+      for i=1,#RelativeLocationZoffset do
+        writeFloat(address+RelativeLocationZoffset[i]-8, readFloat(address+RelativeLocationZoffset[i]-8)+20)
+      end
+    end
+    if isKeyPressed(VK_W) then
+      for i=1,#RelativeLocationZoffset do
+        writeFloat(address+RelativeLocationZoffset[i]-8, readFloat(address+RelativeLocationZoffset[i]-8)-20)
+      end
+    end
+    if isKeyPressed(VK_A) then
+      for i=1,#RelativeLocationZoffset do
+        writeFloat(address+RelativeLocationZoffset[i]-4, readFloat(address+RelativeLocationZoffset[i]-4)+20)
+      end
+    end
+    if isKeyPressed(VK_D) then
+      for i=1,#RelativeLocationZoffset do
+        writeFloat(address+RelativeLocationZoffset[i]-4, readFloat(address+RelativeLocationZoffset[i]-4)-20)
+      end
+    end
+  end
+end
+
+[DISABLE]
+wasd.destroy()
+</AssemblerScript>
+            </CheatEntry>
+          </CheatEntries>
+        </CheatEntry>
+        <CheatEntry>
+          <ID>26039</ID>
+          <Description>"bCanBeDamaged false (Godmode)      Numpad4 :Deactive, Numpad5 :Active"</Description>
+          <LastState/>
+          <VariableType>Auto Assembler Script</VariableType>
+          <AssemblerScript>{$lua}
+if syntaxcheck then return end
+local str1='[[[[[[GEngine]+Engine.GameInstance]+GameInstance.LocalPlayers]]+Player.PlayerController]+Actor.Character]+Actor.bCanBeDamaged'
+[ENABLE]
+--CanBeDamaged = createTimer()
+--CanBeDamaged.setInterval(1000)
+--CanBeDamaged.OnTimer = function()
+local address=getAddressSafe(str1)
+if address then
+local bCanBeDamaged=readBytes(address,1) &amp; ~ getAddress('Actor.bCanBeDamaged.Bit')
+writeBytes(address,bCanBeDamaged)
+end
+--end
+ 
+ 
+[DISABLE]
+--CanBeDamaged.destroy()
+
+local address=getAddressSafe(str1)
+if address then
+local bCanBeDamaged=readBytes(address,1) | getAddress('Actor.bCanBeDamaged.Bit')
+writeBytes(address,bCanBeDamaged)
+end
+</AssemblerScript>
+          <Hotkeys>
+            <Hotkey>
+              <Action>Activate</Action>
+              <Keys>
+                <Key>101</Key>
+              </Keys>
+              <ID>0</ID>
+            </Hotkey>
+            <Hotkey>
+              <Action>Deactivate</Action>
+              <Keys>
+                <Key>100</Key>
+              </Keys>
+              <ID>1</ID>
+            </Hotkey>
+          </Hotkeys>
+        </CheatEntry>
+        <CheatEntry>
+          <ID>26025</ID>
+          <Description>"Jump Multiplier                                       Numpad0 :Deactive, Numpad1 :Active &amp; Increase"</Description>
+          <LastState/>
+          <VariableType>Auto Assembler Script</VariableType>
+          <AssemblerScript>{$lua}
+jumpmultiplier=1
+if syntaxcheck then return end
+local str1='[[[[[[[GEngine]+Engine.GameInstance]+GameInstance.LocalPlayers]]+Player.PlayerController]+Actor.Character]+Character.CharacterMovement]'
+local str2=str1..'CharacterMovementComponent.JumpZVelocity'
+local str3=str1..'CharacterMovementComponent.MaxAcceleration'
+local str4=str1..'CharacterMovementComponent.AirControl'
+if not jumpdefault then jumpdefault=readFloat(str2)&lt;100 and 100 or readFloat(str2) end
+if not MaxAccelerationdefault then MaxAccelerationdefault=readFloat(str3)end
+if not AirControldefault then AirControldefault=readFloat(str4)end
+[ENABLE]
+jumpmuti=createHotkey(function()jumpmultiplier=jumpmultiplier+0.5 end,VK_NUMPAD1)
+jump = createTimer()
+jump.setInterval(100)
+jump.OnTimer = function()
+local address=getAddressSafe(str2)
+local address2=getAddressSafe(str3)
+local address3=getAddressSafe(str4)
+if address then writeFloat(address,jumpdefault*jumpmultiplier)
+writeFloat(address2,MaxAccelerationdefault*jumpmultiplier)
+writeFloat(address3,AirControldefault*jumpmultiplier)
+end
+end
+[DISABLE]
+jump.destroy()
+jumpmuti.destroy()
+local address=getAddressSafe(str2)
+local address2=getAddressSafe(str3)
+local address3=getAddressSafe(str4)
+if address then writeFloat(address,jumpdefault)
+writeFloat(address2,MaxAccelerationdefault)
+writeFloat(address3,AirControldefault)
+end
+
+</AssemblerScript>
+          <Hotkeys>
+            <Hotkey>
+              <Action>Activate</Action>
+              <Keys>
+                <Key>97</Key>
+              </Keys>
+              <ID>0</ID>
+            </Hotkey>
+            <Hotkey>
+              <Action>Deactivate</Action>
+              <Keys>
+                <Key>96</Key>
+              </Keys>
+              <ID>1</ID>
+            </Hotkey>
+          </Hotkeys>
+        </CheatEntry>
+        <CheatEntry>
+          <ID>26026</ID>
+          <Description>"MovementSpeed Multiplier                   Numpad2 :Deactive, Numpad3 :Active &amp; Increase"</Description>
+          <LastState/>
+          <VariableType>Auto Assembler Script</VariableType>
+          <AssemblerScript>{$lua}
+speedvarmutiplier=1
+if syntaxcheck then return end
+local str1={'[[[[[[[GEngine]+Engine.GameInstance]+GameInstance.LocalPlayers]]+Player.PlayerController]+Actor.Character]+Character.CharacterMovement]+CharacterMovementComponent.MaxWalkSpeed'
+,'[[[[[[[GEngine]+Engine.GameInstance]+GameInstance.LocalPlayers]]+Player.PlayerController]+Actor.Character]+Character.CharacterMovement]+CharacterMovementComponent.MaxWalkSpeedCrouched'
+,'[[[[[[[GEngine]+Engine.GameInstance]+GameInstance.LocalPlayers]]+Player.PlayerController]+Actor.Character]+Character.CharacterMovement]+CharacterMovementComponent.MaxSwimSpeed'
+,'[[[[[[[GEngine]+Engine.GameInstance]+GameInstance.LocalPlayers]]+Player.PlayerController]+Actor.Character]+Character.CharacterMovement]+CharacterMovementComponent.MaxFlySpeed'
+,'[[[[[[[GEngine]+Engine.GameInstance]+GameInstance.LocalPlayers]]+Player.PlayerController]+Actor.Character]+Character.CharacterMovement]+CharacterMovementComponent.MaxCustomMovementSpeed'
+,'[[[[[[[GEngine]+Engine.GameInstance]+GameInstance.LocalPlayers]]+Player.PlayerController]+Actor.Character]+Character.CharacterMovement]+CharacterMovementComponent.MaxAcceleration'
+}
+
+if not speedvar then
+  speedvar={}
+  for i=1,#str1 do
+    speedvar[i]=readFloat(str1[i])
+  end
+end
+
+[ENABLE]
+speedvarmuti=createHotkey(function() speedvarmutiplier=speedvarmutiplier+0.5 end,VK_NUMPAD3)
+speedv = createTimer()
+speedv.setInterval(100)
+speedv.OnTimer = function()
+  for i=1,#str1 do
+    address=getAddressSafe(str1[i])
+    if address then writeFloat(address,speedvar[i]*speedvarmutiplier)end
+  end
+end
+[DISABLE]
+speedv.destroy()
+speedvarmuti.destroy()
+
+for i=1,#str1 do
+  address=getAddressSafe(str1[i])
+  if address then writeFloat(address,speedvar[i]*speedvarmutiplier)end
+end
+speedvar=nil
+</AssemblerScript>
+          <Hotkeys>
+            <Hotkey>
+              <Action>Activate</Action>
+              <Keys>
+                <Key>99</Key>
+              </Keys>
+              <ID>0</ID>
+            </Hotkey>
+            <Hotkey>
+              <Action>Deactivate</Action>
+              <Keys>
+                <Key>98</Key>
+              </Keys>
+              <ID>1</ID>
+            </Hotkey>
+          </Hotkeys>
+        </CheatEntry>
+        <CheatEntry>
+          <ID>26052</ID>
+          <Description>"UWorld"</Description>
+          <LastState Value="" RealAddress="22C195A09F0"/>
+          <ShowAsSigned>0</ShowAsSigned>
+          <GroupHeader>1</GroupHeader>
+          <Address>GEngine</Address>
+          <Offsets>
+            <Offset>0</Offset>
+            <Offset>GameViewportClient.World</Offset>
+            <Offset>Engine.GameViewport</Offset>
+          </Offsets>
+        </CheatEntry>
+        <CheatEntry>
+          <ID>25848</ID>
+          <Description>"Player"</Description>
+          <LastState Value="" RealAddress="00000000"/>
+          <ShowAsSigned>0</ShowAsSigned>
+          <GroupHeader>1</GroupHeader>
+          <Address>GEngine</Address>
+          <Offsets>
+            <Offset>0</Offset>
+            <Offset>Actor.Character</Offset>
+            <Offset>Player.PlayerController</Offset>
+            <Offset>0</Offset>
+            <Offset>GameInstance.LocalPlayers</Offset>
+            <Offset>Engine.GameInstance</Offset>
+          </Offsets>
+          <CheatEntries>
+            <CheatEntry>
+              <ID>25853</ID>
+              <Description>"CharacterMovement"</Description>
+              <LastState Value="" RealAddress="00000000"/>
+              <ShowAsSigned>0</ShowAsSigned>
+              <GroupHeader>1</GroupHeader>
+              <Address>+Character.CharacterMovement</Address>
+              <Offsets>
+                <Offset>0</Offset>
+              </Offsets>
+              <CheatEntries>
+                <CheatEntry>
+                  <ID>25854</ID>
+                  <Description>"JumpZVelocity"</Description>
+                  <ShowAsSigned>0</ShowAsSigned>
+                  <VariableType>Float</VariableType>
+                  <Address>+CharacterMovementComponent.JumpZVelocity</Address>
+                </CheatEntry>
+                <CheatEntry>
+                  <ID>25855</ID>
+                  <Description>"MaxWalkSpeed"</Description>
+                  <ShowAsSigned>0</ShowAsSigned>
+                  <VariableType>Float</VariableType>
+                  <Address>+CharacterMovementComponent.MaxWalkSpeed</Address>
+                </CheatEntry>
+                <CheatEntry>
+                  <ID>25857</ID>
+                  <Description>"MaxWalkSpeedCrouched"</Description>
+                  <ShowAsSigned>0</ShowAsSigned>
+                  <VariableType>Float</VariableType>
+                  <Address>+CharacterMovementComponent.MaxWalkSpeedCrouched</Address>
+                </CheatEntry>
+                <CheatEntry>
+                  <ID>25858</ID>
+                  <Description>"MaxAcceleration"</Description>
+                  <ShowAsSigned>0</ShowAsSigned>
+                  <VariableType>Float</VariableType>
+                  <Address>+CharacterMovementComponent.MaxAcceleration</Address>
+                </CheatEntry>
+              </CheatEntries>
+            </CheatEntry>
+          </CheatEntries>
+        </CheatEntry>
+      </CheatEntries>
+    </CheatEntry>
+    <CheatEntry>
+      <ID>26049</ID>
+      <Description>"Tools"</Description>
+      <Options moHideChildren="1"/>
+      <LastState Value="" RealAddress="00000000"/>
+      <GroupHeader>1</GroupHeader>
+      <CheatEntries>
+        <CheatEntry>
+          <ID>26048</ID>
+          <Description>"FNamePool scanner"</Description>
+          <LastState/>
+          <VariableType>Auto Assembler Script</VariableType>
+          <AssemblerScript Async="1">{$lua}
+if syntaxcheck then return end
+[ENABLE]
+
+print('------------------')
+local isUnicode=false
+local strlist,result,result2,result3,pointer1,pointer2,pointer3=stringscan('ByteProperty',nil,nil,isUnicode)
+
+for i=1,#strlist do
+  result=stringscan('IntProperty',getAddressSafe(strlist[i]),getAddressSafe(strlist[i]..'+50'),isUnicode)
+  if #result&gt;0 then
+    result=stringscan('None',getAddressSafe(strlist[i]..'-50'),getAddressSafe(strlist[i]),isUnicode)
+    print(strlist[i])
+    if #result&gt;0 then
+      if string.sub(strlist[i],strlist[i]:len()-3,strlist[i]:len()-2)=='00' then
+        result=pointerscan(getAddressSafe(string.sub(strlist[i],1,strlist[i]:len()-2)..'00'))
+        for j=1,#result do
+          pointer1=readPointer(result[j]..(targetIs64Bit() and '+8' or '+4'))
+          pointer1=readPointer(pointer1)
+          pointer2=readPointer(result[j]..(targetIs64Bit() and '+10' or '+8'))
+          pointer2=readPointer(pointer2)
+          pointer3=readPointer(result[j]..(targetIs64Bit() and '+18' or '+C'))
+          pointer3=readPointer(pointer3)
+
+          if pointer1 and pointer2 and pointer3 then
+            print(strlist[i]..'&lt;-'..result[j])
+            unregisterSymbol('FNamePool')
+            registerSymbol('FNamePool',result[j]..'-10',true)
+            if ue4versioncheck()==0 then UE4ver=23 end
+
+            if string.sub(result[j],result[j]:len()-1,result[j]:len())=='00' then
+              result2=pointerscan(getAddressSafe(result[j]))
+              for k=1,#result2 do
+                print(strlist[i]..'&lt;-'..result[j]..'&lt;-'..result2[k])
+                result3=pointerscan(getAddressSafe(result2[k]),process)
+                for l=1,#result3 do
+                  print(strlist[i]..'&lt;-'..result[j]..'&lt;-'..result2[k]..'&lt;-'..result3[l])
+                  if getAddress(result3[l])%4==0 then
+                    unregisterSymbol('FNamePool')
+                    registerSymbol('FNamePool',result3[l],true)
+                    if ue4versioncheck()==0 then UE4ver=22 end
+                    goto done
+                  end
+                end
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end
+::done::
+print('done')
+
+[DISABLE]
+
+</AssemblerScript>
+        </CheatEntry>
+        <CheatEntry>
+          <ID>26096</ID>
+          <Description>"FNamePool scanner V2 (Generic)"</Description>
+          <LastState/>
+          <VariableType>Auto Assembler Script</VariableType>
+          <AssemblerScript Async="1">{$lua}
+if syntaxcheck then return end
+[ENABLE]
+
+print('------------------')
+local isUnicode=false
+local strlist,result,result2,result3,pointer1,pointer2,pointer3=stringscan('ByteProperty',nil,nil,isUnicode)
+
+for i=1,#strlist do
+  result=stringscan('IntProperty',getAddressSafe(strlist[i]),getAddressSafe(strlist[i]..'+50'),isUnicode)
+  if #result&gt;0 then
+    result=stringscan('None',getAddressSafe(strlist[i]..'-50'),getAddressSafe(strlist[i]),isUnicode)
+    print(strlist[i])
+    if #result&gt;0 then
+      if string.sub(strlist[i],strlist[i]:len()-3,strlist[i]:len()-2)=='00' then
+        result=pointerscan(getAddressSafe(string.sub(strlist[i],1,strlist[i]:len()-2)..'00'),nil,nil,getAddressSafe(string.sub(strlist[i],1,strlist[i]:len()-2)..'00')+0x50)
+        for j=1,#result do
+          pointer1=readPointer(result[j]..(targetIs64Bit() and '+8' or '+4'))
+          pointer1=readPointer(pointer1)
+          pointer2=readPointer(result[j]..(targetIs64Bit() and '+10' or '+8'))
+          pointer2=readPointer(pointer2)
+          pointer3=readPointer(result[j]..(targetIs64Bit() and '+18' or '+C'))
+          pointer3=readPointer(pointer3)
+
+          if pointer1 and pointer2 and pointer3 then
+            print(strlist[i]..'&lt;-'..result[j])
+            unregisterSymbol('FNamePool')
+            registerSymbol('FNamePool',result[j]..'-10',true)
+            if ue4versioncheck()==0 then UE4ver=23 end
+
+            if getAddress(result[j])%4==0 then
+              result2=pointerscan(getAddressSafe(result[j]))
+              for k=1,#result2 do
+                print(strlist[i]..'&lt;-'..result[j]..'&lt;-'..result2[k])
+                if getAddress(result2[k])%4==0 then
+                  if inModule(result2[k]) then UE4ver=ue4versioncheck() unregisterSymbol('FNamePool') registerSymbol('FNamePool',result2[k],true) goto done end
+                  result3=pointerscan(getAddressSafe(result2[k]),getAddress(process),getAddress(process)+getModuleSize(process))
+                  for l=1,#result3 do
+                    print(strlist[i]..'&lt;-'..result[j]..'&lt;-'..result2[k]..'&lt;-'..result3[l])
+                    if getAddress(result3[l])%4==0 then
+                      unregisterSymbol('FNamePool')
+                      registerSymbol('FNamePool',result3[l],true)
+                      if ue4versioncheck()==0 then UE4ver=22 end
+                      goto done
+                    end
+                  end
+                end
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end
+::done::
+if readPointer('FNamePool') then print(string.format('FNamePool=%X',getAddress('FNamePool'))) end
+print('done')
+
+[DISABLE]
+
+</AssemblerScript>
+        </CheatEntry>
+        <CheatEntry>
+          <ID>26099</ID>
+          <Description>"FNamePool scanner V3 (Unicode)"</Description>
+          <LastState/>
+          <VariableType>Auto Assembler Script</VariableType>
+          <AssemblerScript Async="1">{$lua}
+if syntaxcheck then return end
+[ENABLE]
+
+print('------------------')
+local isUnicode=true
+local strlist,result,result2,result3,pointer1,pointer2,pointer3=stringscan('ByteProperty',nil,nil,isUnicode)
+
+for i=1,#strlist do
+  print(strlist[i])
+  result=pointerscan(getAddress(strlist[i])-0x50,nil,nil,getAddress(strlist[i]))
+  for j=1,#result do
+    if string.sub(result[j],result[j]:len()-3,result[j]:len()-2)=='00' then
+      print(result[j])
+      pointer1=readPointer(result[j]..(targetIs64Bit() and '+8' or '+4'))
+      pointer1=readPointer(pointer1)
+      pointer2=readPointer(result[j]..(targetIs64Bit() and '+10' or '+8'))
+      pointer2=readPointer(pointer2)
+      pointer3=readPointer(result[j]..(targetIs64Bit() and '+18' or '+C'))
+      pointer3=readPointer(pointer3)
+      if pointer1 and pointer2 and pointer3 then
+         print(strlist[i]..'&lt;-'..result[j])
+         result2=pointerscan(getAddressSafe(string.sub(result[j],1,result[j]:len()-2)..'00'))
+         for k=1,#result2 do
+           print(strlist[i]..'&lt;-'..result[j]..'&lt;-'..result2[k])
+           if inModule(result2[k]) then UE4ver=ue4versioncheck() unregisterSymbol('FNamePool') registerSymbol('FNamePool',result2[k],true) goto done end
+
+         end
+      end
+    end
+  end
+end
+::done::
+print('done')
+[DISABLE]
+
+</AssemblerScript>
+        </CheatEntry>
+        <CheatEntry>
+          <ID>26105</ID>
+          <Description>"FNamePool scanner V4 (BatmanAk)"</Description>
+          <LastState/>
+          <VariableType>Auto Assembler Script</VariableType>
+          <AssemblerScript Async="1">{$lua}
+if syntaxcheck then return end
+[ENABLE]
+
+print('------------------')
+local isUnicode=false
+local size= targetIs64Bit() and 8 or 4
+local result2,result,result3,result4,pointer1,pointer2,pointer3,tempstringoffset,str,tempfnamepooloffset=stringscan('ByteProperty',nil,nil,isUnicode)
+for i=1,#result2 do
+--print(result2[i])
+  result=pointerscan(getAddress(result2[i]..'-50'),nil,nil,getAddress(result2[i]))
+
+  for j=1,#result do
+    tempstringoffset=getAddress(result2[i])-readPointer(getAddress(result[j]))
+
+    for k=size,0x50,4 do
+      str=readString(readPointer(getAddress(result[j])+k)+tempstringoffset,0x30,isUnicode)
+      if str and str=='IntProperty' then
+        stringoffset=tempstringoffset
+        print(result2[i]..'&lt;-'..result[j])
+
+        result3=pointerscan(getAddress(result[j]..'-50')-k,nil,nil,getAddress(result[j]))
+        for m=1,#result3 do
+
+
+          pointer1=readPointer(result3[m]..(targetIs64Bit() and '+8' or '+4'))
+          pointer1=readPointer(pointer1)
+          pointer2=readPointer(result3[m]..(targetIs64Bit() and '+10' or '+8'))
+          pointer2=readPointer(pointer2)
+          pointer3=readPointer(result3[m]..(targetIs64Bit() and '+18' or '+C'))
+          pointer3=readPointer(pointer3)
+
+          if pointer1 and pointer2 and pointer3 then
+            print(result2[i]..'&lt;-'..result[j]..'&lt;-'..result3[m])
+
+            --print(result2[i]..'&lt;-'..result[j]..'&lt;-'..result3[m])
+            stringoffset2=0xc--((getAddress(result[j])-readPointer(result3[m])+size)/2)-size
+          --print(string.format('%X',((getAddress(result[j])-readPointer(result3[m])+size)/2)-size))
+            stringmul=k
+
+            result4=pointerscan(getAddress(result3[m])-0x50,process,nil,getAddress(result3[m])+0x50)
+            for n=1,#result4 do
+              print(result2[i]..'&lt;-'..result[j]..'&lt;-'..result3[m]..'&lt;-'..result4[n])
+              unregisterSymbol('FNamePool') registerSymbol('FNamePool',result4[n],true)
+            end
+          end
+        end
+      end
+    end
+  end
+end
+::done::
+print('done')
+
+
+
+[DISABLE]
+
+</AssemblerScript>
+        </CheatEntry>
+        <CheatEntry>
+          <ID>26080</ID>
+          <Description>"UE4 Object scanner (region)"</Description>
+          <LastState Activated="1"/>
+          <VariableType>Auto Assembler Script</VariableType>
+          <AssemblerScript Async="1">{$lua}
+
+if syntaxcheck then return end
+
+[ENABLE]
+--unregisterSymbol('FNamePool')
+--registerSymbol('FNamePool','libUE4.so+41DE8A4',true)
+--UE4ver=nil
+--if not UE4ver then ue4versioncheck()end
+--ue4config()
+--ue4parsetable()
+ue4parsetableFNamePool()
+
+FNameStringAlgo(1,true)
+FNameStringAlgo(3,true)
+if not stringoffset then print('error: stringoffset/ByteProperty not found') error() end
+
+Aligned=true
+function ue4parsetablecheck()
+end
+
+local CoreUObject=FindStringFName('/Script/CoreUObject')
+if not UObject then  UObject = {} end
+print(CoreUObject)
+local address,pointer=getAddress('FNamePool')
+local size,regionsize,baseaddress=getregionsize(address)
+size=size+getregionsize(address+size+1)
+size=size+getregionsize(address+size+1)
+size=size+getregionsize(address+size+1)
+size=size+getregionsize(address+size+1)
+size=size+getregionsize(address+size+1)
+print(string.format('%X ~ %X',address,address+size))
+for i=address,address+size,4 do
+  if readPointer(readPointer(readPointer(readPointer(i)))) then
+    pointer=readPointer(readPointer(i))
+    if checkvalue(pointer,0x50,CoreUObject,4)then print(string.format('%X',i)) unregisterSymbol('GUObjectArray') registerSymbol('GUObjectArray',i,true) break end
+    pointer=readPointer(pointer)
+    if checkvalue(pointer,0x50,CoreUObject,4)then print(string.format('%X',i)) unregisterSymbol('GUObjectArray') registerSymbol('GUObjectArray',i,true) break end
+  end
+end
+
+if ue4versioncheck()&lt;=2 and targetIs64Bit() and UE4ver&lt;23 then
+  if readInteger('GUObjectArray+24')==0xFFFFFFFF then UE4ver=18
+  else UE4ver=20 end
+end
+
+print('done\n')
+
+ue4parsetable() 
+[DISABLE]
+
+</AssemblerScript>
+        </CheatEntry>
+        <CheatEntry>
+          <ID>26121</ID>
+          <Description>"UE4 Object scanner"</Description>
+          <LastState/>
+          <VariableType>Auto Assembler Script</VariableType>
+          <AssemblerScript Async="1">{$lua}
+
+if syntaxcheck then return end
+
+[ENABLE]
+--unregisterSymbol('FNamePool')
+--registerSymbol('FNamePool','libUE4.so+41DE8A4',true)
+--UE4ver=nil
+--if not UE4ver then ue4versioncheck()end
+--ue4config()
+--ue4parsetable()
+ue4parsetableFNamePool()
+
+FNameStringAlgo(1,true)
+FNameStringAlgo(3,true)
+if not stringoffset then print('error: stringoffset/ByteProperty not found') error() end
+
+Aligned=true
+function ue4parsetablecheck()
+end
+
+
+local Object=FindStringFName('Object')
+local Class=FindStringFName('Class')
+local CoreUObject=FindStringFName('/Script/CoreUObject')
+if not UObject then  UObject = {} end
+print(Object)
+print(Class)
+print(CoreUObject)
+local size,pointer,pointer2,pointer3=(targetIs64Bit() and 8 or 4)
+local result,result2=groupscan('4:'..Object)
+print(#result)
+for i=1,#result do
+  if checkvalue(getAddress(result[i])-0x50,0x50,1,4)then
+    for j=0,0x100,size do
+      pointer=readPointer(getAddress(result[i])-0x50+j)
+      if not pointer then break end
+      if checkvalue(pointer,0x50,Class,4) then
+        pointer3=pointer
+        for k=0,0x100,size do
+          local pointer=readPointer(getAddress(result[i])-0x50+k)
+          if not pointer then break end
+          if checkvalue(pointer,0x50,CoreUObject,4)then
+
+            --print(result[i])
+            local value=targetIs64Bit() and readInteger(pointer+4) or readSmallInteger(pointer+2)
+            --print(string.format('%X',readInteger(pointer)))
+
+            if targetIs64Bit() then pointer2=checkvalue(getAddress(result[i])-0x50,0x50,value,(size/2))
+            else
+              for p=0,10 do
+                if pointer2 then break end
+                pointer2=checkvalue(getAddress(result[i])-0x50,0x50,value-5+p,(size/2))
+              end
+            end
+            if pointer2 then
+              pointer2=pointer2-(size/2)
+              print(string.format('%X',pointer2))
+
+              if checkvalue(pointer2+size,0x50,1,4)then UObject.ObjectId=checkvalue(pointer2+size,0x50,1,4)-pointer2
+              else UObject.ObjectId=checkvalue(pointer2,0x50,1,4)-pointer2 end
+              UObject.Class=checkvalue(pointer2+size,0x50,pointer3,size)-pointer2
+              UObject.FNameIndex=checkvalue(pointer2+size,0x50,Object,4)-pointer2
+              UObject.Outer=checkvalue(pointer2+size,0x50,pointer,size)-pointer2
+
+              local str
+              if UE4ver&lt;9 and targetIs64Bit() then
+                str=string.format('8:0x%X 8:0x%X',pointer,pointer2)
+              elseif UE4ver&lt;9 then
+                str=string.format('4:0x%X 4:0x%X',pointer,pointer2)
+              elseif targetIs64Bit() then
+                str=string.format('8:0x%X 8:* 8:* 8:0x%X',pointer,pointer2)
+              else
+                str=string.format('4:0x%X 4:* 4:* 4:* 4:0x%X',pointer,pointer2)
+              end
+              print(str)
+              result2=groupscan(str)
+              for n=1,#result2 do
+                local result3
+                if not Aligned or getAddress(result2[n])%size==0 then
+                  print(string.format('%X&lt;-%s',pointer2,result2[n]))
+                  --result3=pointerscan(getAddress(result2[n]:sub(1,result2[n]:len()-2)..'00'))
+                end
+                if not result3 or #result3&lt;=0 then result3=pointerscan(getAddress(result2[n]))end
+                for o=1,#result3 do
+                  local result4
+                  if not Aligned or getAddress(result3[o])%size==0 then
+
+                    --if not inModule(result3[o]) then
+                      print(string.format('%X&lt;-%s&lt;-%s',pointer2,result2[n],result3[o]))
+
+                    --end
+
+                    if inModule(result3[o]) and (readInteger(result3[o]..'-10+1C')&lt;0x7FFFFF or readInteger(result3[o]..'-10+24')&lt;0x7FFFFF) then
+                      unregisterSymbol('GUObjectArray')
+                      registerSymbol('GUObjectArray',result3[o]..'-10',true)
+                      goto done
+                    end
+
+                    result4=pointerscan(getAddress(result3[o]))
+
+
+                  end
+                  if not result4 then result4={}end
+                  for q=1,#result4 do
+                    if not Aligned or getAddress(result4[q])%size==0 then
+                      print(string.format('%X&lt;-%s&lt;-%s&lt;-%s',pointer2,result2[n],result3[o],result4[q]))
+
+                      if inModule(result4[q]) then
+                        unregisterSymbol('GUObjectArray')
+                        registerSymbol('GUObjectArray',result4[q]..'-10',true)
+                        goto done
+                      end
+
+                    end
+                  end
+                end
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end
+::done::
+
+if ue4versioncheck()&lt;=2 and targetIs64Bit() and UE4ver&lt;23 then
+  if readInteger('GUObjectArray+24')==0xFFFFFFFF then UE4ver=18
+  else UE4ver=20 end
+end
+
+print('done\n')
+
+ue4parsetable() 
+[DISABLE]
+
+</AssemblerScript>
+        </CheatEntry>
+        <CheatEntry>
+          <ID>26086</ID>
+          <Description>"UE4 Object scanner V2"</Description>
+          <LastState/>
+          <VariableType>Auto Assembler Script</VariableType>
+          <AssemblerScript Async="1">{$lua}
+
+if syntaxcheck then return end
+
+[ENABLE]
+--unregisterSymbol('FNamePool')
+--registerSymbol('FNamePool','libUE4.so+41DE8A4',true)
+--UE4ver=nil
+--if not UE4ver then ue4versioncheck()end
+--ue4config()
+--ue4parsetable()
+ue4parsetableFNamePool()
+
+FNameStringAlgo(1,true)
+FNameStringAlgo(3,true)
+if not stringoffset then print('error: stringoffset/ByteProperty not found') error() end
+
+Aligned=true
+function ue4parsetablecheck()
+end
+
+
+local Object=FindStringFName('Object')
+local Class=FindStringFName('Class')
+local CoreUObject=FindStringFName('/Script/CoreUObject')
+if not UObject then  UObject = {} end
+print(Object)
+print(Class)
+print(CoreUObject)
+local size,pointer,pointer2,pointer3=(targetIs64Bit() and 8 or 4)
+local result,result2=groupscan('4:'..Object)
+print(#result)
+for i=1,#result do
+  if checkvalue(getAddress(result[i])-0x50,0x50,1,4)then
+    for j=0,0x100,size do
+      pointer=readPointer(getAddress(result[i])-0x50+j)
+      if not pointer then break end
+      if checkvalue(pointer,0x50,Class,4) then
+        pointer3=pointer
+        for k=0,0x100,size do
+          local pointer=readPointer(getAddress(result[i])-0x50+k)
+          if not pointer then break end
+          if checkvalue(pointer,0x50,CoreUObject,4)then
+
+            --print(result[i])
+            local value=targetIs64Bit() and readInteger(pointer+4) or readSmallInteger(pointer+2)
+            --print(string.format('%X',readInteger(pointer)))
+
+            if targetIs64Bit() then pointer2=checkvalue(getAddress(result[i])-0x50,0x50,value,(size/2))
+            else
+              for p=0,10 do
+                if pointer2 then break end
+                pointer2=checkvalue(getAddress(result[i])-0x50,0x50,value-5+p,(size/2))
+              end
+            end
+            if pointer2 then
+              pointer2=pointer2-(size/2)
+              print(string.format('%X',pointer2))
+
+              UObject.ObjectId=checkvalue(pointer2+size,0x50,1,4)-pointer2
+              UObject.Class=checkvalue(pointer2+size,0x50,pointer3,size)-pointer2
+              UObject.FNameIndex=checkvalue(pointer2+size,0x50,Object,4)-pointer2
+              UObject.Outer=checkvalue(pointer2+size,0x50,pointer,size)-pointer2
+
+              local str
+
+              for p=4,0,-1 do
+                str=string.format('%u:0x%X',size,pointer)
+                for q=1,p do
+                  str=str..' 4:*'
+                end
+                str=str..string.format(' %u:0x%X',size,pointer2)
+                UObjectMul=(4*p)+size
+
+                print(str)
+
+
+                result2=groupscan(str)
+                for n=1,#result2 do
+                  local result3
+                  if result2[n]:sub(result2[n]:len()-1,result2[n]:len())=='00' then
+                    print(string.format('%X&lt;-%s',pointer2,result2[n]))
+                    result3=pointerscan(getAddress(result2[n]))
+                  end
+                  if not result3  then result3={}end
+                  for o=1,#result3 do
+                    local result4
+                    if not Aligned or getAddress(result3[o])%size==0 then
+                      --if not inModule(result3[o]) then
+                        print(string.format('%X&lt;-%s&lt;-%s',pointer2,result2[n],result3[o]))
+                      --end
+                      if inModule(result3[o]) and (readInteger(result3[o]..'-10+1C')&lt;0x7FFFFF or readInteger(result3[o]..'-10+24')&lt;0x7FFFFF) then
+                        unregisterSymbol('GUObjectArray')
+                        registerSymbol('GUObjectArray',result3[o]..'-10',true)
+                        result4=pointerscan(getAddress(result3[o]..'-10'),process)
+                        if result4[1] then
+                          print(string.format('%X&lt;-%s&lt;-%s&lt;-%s',pointer2,result2[n],result3[o],result4[1]))
+                          unregisterSymbol('GUObjectArray')
+                          registerSymbol('GUObjectArray',result4[1],true)
+                        end
+                        goto done
+                      end
+                      result4=pointerscan(getAddress(result3[o]))
+                    end
+                    if not result4 then result4={}end
+                    for q=1,#result4 do
+                      if not Aligned or getAddress(result4[q])%size==0 then
+                        print(string.format('%X&lt;-%s&lt;-%s&lt;-%s',pointer2,result2[n],result3[o],result4[q]))
+                        if inModule(result4[q]) then
+                          unregisterSymbol('GUObjectArray')
+                          registerSymbol('GUObjectArray',result4[q]..'-10',true)
+
+                          goto done
+                        end
+                      end
+                    end
+                  end
+                end
+              end
+
+            end
+          end
+        end
+      end
+    end
+  end
+end
+::done::
+
+if ue4versioncheck()&lt;=2 and targetIs64Bit() and UE4ver&lt;23 then
+  if readInteger('GUObjectArray+24')==0xFFFFFFFF then UE4ver=18
+  elseif readInteger('GUObjectArray+14')==0 then UE4ver=9
+  else UE4ver=20 end
+end
+
+print('done\n')
+
+ue4parsetable() 
+[DISABLE]
+
+</AssemblerScript>
+        </CheatEntry>
+        <CheatEntry>
+          <ID>26120</ID>
+          <Description>"UE3 Namepool &amp; ObjectArray scanner (using string reference)"</Description>
+          <LastState/>
+          <VariableType>Auto Assembler Script</VariableType>
+          <AssemblerScript Async="1">{$lua}
+if syntaxcheck then return end
+[ENABLE]
+print('------------------')
+local result1,num,address,result2,result3,pointer,flag1,flag2,flag3=stringscan('i&gt;=0 &amp;&amp; (i&lt;ArrayNum||(i==0',process),0
+local size=targetIs64Bit() and 8 or 4
+if targetIs64Bit() then result2=sigscan('48 8D',process)end
+for i=1,#result1 do
+  print(result1[i])
+  if not targetIs64Bit() then result2=pointerscan(getAddress(result1[i]),process)end
+  for j=1,#result2 do
+    if (targetIs64Bit() and string.find(disassemble(result2[j]),result1[i])) or not targetIs64Bit() then
+      if findOpcode(result2[j],(targetIs64Bit() and '*8' or '*4'),0x100) and readPointer(readPointer(findAddress('Array',0,result2[j]..'+4',nil,nil,nil,nil,nil,nil,0x10)[1]))  then
+        --print(result1[i]..'&lt;-'..result2[j])
+        result3=findAddress('GUObjectArray',0,result2[j]..'+4')
+        for k=1,#result3 do
+          flag3=false
+          address=getAddress(result3[k])
+          flag2=ValidateFNamePool(getAddress(address))
+          if flag2 then print(string.format('FNamePool=%X',getAddressSafe('FNamePool'))) end
+          pointer=readPointer(address)
+          if readPointer(readPointer(pointer)) then
+            for m=0,1 do
+              for n=0,20*size,size do
+                if not readPointer(readPointer(readPointer(pointer+n))) then break end
+                if n==20*size then flag3=true end
+              end
+              if flag3 then break end
+              pointer=readPointer(pointer)
+            end
+          end
+          if flag3 and getAddressSafe('GUObjectArray')~=getAddress(address) and getAddressSafe('FNamePool')~=getAddress(address) and getAddress(address)%4==0 and readPointer(readPointer(readPointer(address))) and readPointer(readPointer(address))%4==0 then unregisterSymbol('GUObjectArray')registerSymbol('GUObjectArray',address,true) print(string.format('GUObjectArray=%X',getAddress('GUObjectArray'))) flag1=true goto done end
+          if flag1 and flag2 then goto done end
+        end
+        --UObjectMul=targetIs64Bit() and 8 or 4
+        --if num&gt;1 then break end
+      end
+    end
+  end
+end
+::done::
+--[[
+if not readPointer('GUObjectArray')then
+  result1=stringscan('Core',process)
+  for i=1,#result1 do
+    print(result1[i])
+    if not targetIs64Bit() then result2=pointerscan(getAddress(result1[i]),process)end
+    for j=1,#result2 do
+      if (targetIs64Bit() and string.find(disassemble(result2[j]),result1[i])) or not targetIs64Bit() then
+        if findOpcode(result2[j],(targetIs64Bit() and '*8' or '*4'),0x100) and readPointer(readPointer(findAddress('Array',0,result2[j]..'+4',nil,nil,nil,nil,nil,nil,0x10)[1]))  then
+          print(result1[i]..'&lt;-'..result2[j])
+          findAddress('GUObjectArray',1,result2[j]..'+4',nil,nil,nil,nil,nil,nil,0x10)
+          break
+        end
+      end
+    end
+  end
+end
+]]
+print('done')
+[DISABLE]
+
+</AssemblerScript>
+        </CheatEntry>
+        <CheatEntry>
+          <ID>26104</ID>
+          <Description>"UE3 Object scanner"</Description>
+          <LastState/>
+          <VariableType>Auto Assembler Script</VariableType>
+          <AssemblerScript Async="1">{$lua}
+
+if syntaxcheck then return end
+
+[ENABLE]
+UE4ver=ue4versioncheck()
+--unregisterSymbol('FNamePool')
+--registerSymbol('FNamePool','libUE4.so+41DE8A4',true)
+--UE4ver=nil
+--if not UE4ver then ue4versioncheck()end
+--ue4config()
+--ue4parsetable()
+ue4parsetableFNamePool()
+
+FNameStringAlgo(1,true)
+FNameStringAlgo(3,true)
+if not stringoffset then print('error: stringoffset/ByteProperty not found') error() end
+
+Aligned=true
+function ue4parsetablecheck()
+end
+
+
+local Object=FindStringFName('Object',isMassEffect)
+if not UObject then  UObject = {} end
+print(Object)
+local size,pointer,pointer1,pointer2,pointer3=(targetIs64Bit() and 8 or 4)
+local result,result2=groupscan('4:'..Object)
+print(#result)
+for i=1,#result do
+  pointer=getAddress(result[i])-0x50
+  for j=0,0x200,4 do
+    pointer1=checkvalue(readPointer(pointer+j),0x200,'Class',1)
+    if pointer1 then
+      for k=0,0x200,4 do
+        pointer2=checkvalue(readPointer(pointer+k),0x200,'Core',1)
+        if pointer2 then
+          print(result[i])
+          pointer1=pointer1-readPointer(pointer+j)
+          pointer2=pointer2-readPointer(pointer+k)
+          if pointer1==pointer2 then
+            pointer=getAddress(result[i])-pointer1
+            print(string.format('%X',pointer))
+            for l=1,3 do
+              pointer3=checkvalue(pointer+size,0x100,l,4)
+              if pointer3 then print(l)
+                UObject.ObjectId=pointer3-pointer
+                UObject.FNameIndex=pointer1
+                UObject.Class=pointer1+j-0x50
+                UObject.Outer=pointer1+k-0x50
+
+                result2=pointerscan(pointer)
+                for m=1,#result2 do
+                  local val=0
+                  for o=1,100 do
+                    val=o
+                    if not readPointer(readPointer(readPointer(getAddress(result2[m])+o*size))) then break end
+                  end
+
+                  if val==100 then
+                    print(string.format('%X',getAddressSafe(result2[m])-(size*l)))
+                    result=pointerscan(getAddressSafe(result2[m])-(size*l),process)
+                    unregisterSymbol('GUObjectArray')
+                    registerSymbol('GUObjectArray',getAddressSafe(result2[m])-(size*l),true)
+                    NOGUObjectsize=true
+
+                    for n=1,#result do
+                      print(result2[m]..'&lt;-'..result[n])
+                      if inModule(result[n]) and getAddress(result[n])%4==0 then
+                        unregisterSymbol('GUObjectArray')
+                        registerSymbol('GUObjectArray',result[n],true)
+                        NOGUObjectsize=nil
+                        goto done
+                      end
+                    end
+                  end
+                  if m==#result2 then goto done end
+                end
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end
+::done::
+--[[
+if ue4versioncheck()&lt;=2 and targetIs64Bit() and UE4ver&lt;23 then
+  if readInteger('GUObjectArray+24')==0xFFFFFFFF then UE4ver=18
+  elseif readInteger('GUObjectArray+14')==0 then UE4ver=9
+  else UE4ver=20 end
+end
+]]
+
+if readPointer('GUObjectArray') then ue4parsetable() end
+print('done\n')
+[DISABLE]
+
+</AssemblerScript>
+        </CheatEntry>
+        <CheatEntry>
+          <ID>26092</ID>
+          <Description>"to Single Line Address"</Description>
+          <LastState/>
+          <VariableType>Auto Assembler Script</VariableType>
+          <AssemblerScript>{$lua}
+function toStr(rec)
+  local tec,str,list=rec,'',{}
+  while(true)do
+    if not tec or not tec.Address then break end
+    list[#list+1]=tec
+    if tec.Address:sub(1,1)~='+' then break end
+    tec=tec.Parent
+  end
+  for i=#list,1,-1 do
+    str=string.format('%s%s',str,list[i].Address)
+    for j=list[i].OffsetCount-1,0,-1 do
+      str=string.format('[%s]+%s',str,list[i].OffsetText[j])
+    end
+  end
+  return str
+end
+
+if syntaxcheck then return end
+[ENABLE]
+
+
+
+for i=0,memrec.Count do
+  memrec.Child[i].Address=toStr(memrec.Child[i]) memrec.Child[i].OffsetCount=0
+end
+[DISABLE]
+
+</AssemblerScript>
+        </CheatEntry>
+        <CheatEntry>
+          <ID>26093</ID>
+          <Description>"to Structural Address"</Description>
+          <LastState/>
+          <VariableType>Auto Assembler Script</VariableType>
+          <AssemblerScript>{$lua}
+function toStr(rec)
+  local tec,str,list=rec,'',{}
+  while(true)do
+    if not tec or not tec.Address then break end
+    list[#list+1]=tec
+    if tec.Address:sub(1,1)~='+' then break end
+    tec=tec.Parent
+  end
+  for i=#list,1,-1 do
+    str=string.format('%s%s',str,list[i].Address)
+    for j=list[i].OffsetCount-1,0,-1 do
+      str=string.format('[%s]+%s',str,list[i].OffsetText[j])
+    end
+  end
+  return str
+end
+
+function toStructural(rec)
+  local str,str2,list=toStr(rec),'',{}
+  if str:find(']') then str2=str:sub(1,str:find(']')-1):gsub('%[','')
+  else str2=str end
+  rec.Address=str2
+  while(true)do
+    if not str:find(']') then break end
+    str=str:sub(str:find(']')+2,str:len())
+    if str:find(']') then str2=str:sub(1,str:find(']')-1):gsub('%[','')
+    else str2=str end
+    list[#list+1]=str2
+  end
+  rec.OffsetCount=#list
+  for i=#list,1,-1 do
+    rec.OffsetText[#list-i]=list[i]
+  end
+end
+
+if syntaxcheck then return end
+[ENABLE]
+
+for i=0,memrec.Count do
+  toStructural(memrec.Child[i])
+end
+
+[DISABLE]
+
+</AssemblerScript>
+        </CheatEntry>
+        <CheatEntry>
+          <ID>26107</ID>
+          <Description>"Auto Assemble script"</Description>
+          <LastState/>
+          <VariableType>Auto Assembler Script</VariableType>
+          <AssemblerScript>{$lua}
+function GetFullName(object)
+  if not GetFullNameMem then GetFullNameMem=allocateMemory(0x100)end
+  executeCodeEx(0, nil, getAddress('GetFullName'), object, GetFullNameMem)
+  local str=readPointer(GetFullNameMem)
+  if str then str=readString(str,readInteger(GetFullNameMem+0x8)*2,true) end
+  return str
+end
+
+
+if syntaxcheck then return end
+[ENABLE]
+
+
+ 
+ 
+[DISABLE]
+
+</AssemblerScript>
+        </CheatEntry>
+        <CheatEntry>
+          <ID>26029</ID>
+          <Description>"DissectCode (Memory View -&gt; Ctrl+J or (Tools -&gt; Dissect code) )"</Description>
+          <Options moHideChildren="1"/>
+          <LastState Value="" RealAddress="00000000"/>
+          <GroupHeader>1</GroupHeader>
+          <CheatEntries>
+            <CheatEntry>
+              <ID>26028</ID>
+              <Description>"Save DissectCode"</Description>
+              <LastState/>
+              <VariableType>Auto Assembler Script</VariableType>
+              <AssemblerScript Async="1">{$lua}
+if syntaxcheck then return end
+[ENABLE]
+local path=string.format('C:\\Users\\%s\\Documents\\My Cheat Tables\\%s_dissectCode',os.getenv('USERNAME'),process:sub(1,string.find(process,'%.')-1))
+getDissectCode().saveToFile(path)
+--getDissectCode().loadFromFile(path)
+ 
+[DISABLE]
+
+</AssemblerScript>
+            </CheatEntry>
+            <CheatEntry>
+              <ID>26030</ID>
+              <Description>"Load DissectCode"</Description>
+              <LastState/>
+              <VariableType>Auto Assembler Script</VariableType>
+              <AssemblerScript Async="1">{$lua}
+if syntaxcheck then return end
+[ENABLE]
+local path=string.format('C:\\Users\\%s\\Documents\\My Cheat Tables\\%s_dissectCode',os.getenv('USERNAME'),process:sub(1,string.find(process,'%.')-1))
+--getDissectCode().saveToFile(path)
+getDissectCode().loadFromFile(path)
+ 
+[DISABLE]
+
+</AssemblerScript>
+            </CheatEntry>
+          </CheatEntries>
+        </CheatEntry>
+      </CheatEntries>
+    </CheatEntry>
+  </CheatEntries>
+  <UserdefinedSymbols/>
+</CheatTable>
