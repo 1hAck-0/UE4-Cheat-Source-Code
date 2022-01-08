@@ -44,6 +44,14 @@ I wasn't able to make a few options/features in the menu myself so I hope some o
 * View the first comment in FHitResult::GetActor() in UnrealEngine.cpp; why do we have to add 3 to get the actual serial number!?
 If you know how to make any of these, please make a pull request!
 
+# Build and Compile
+* You can only compile in VS22 or higher since the project was created with this version of Visual Studio. For ya all lazy asses who haven't updated from VS19, it's worth it anyway
+* Build and compile in x64 architecture since Sword With Suace is 64-bit
+* If you are still not able to compile, please put the correct path to the DirectX SDK in project settings->Configuration Properties->VC++ Directories->Include Directories and Library Directories
+
+# Itroduction to UE
+You should take a special approach to hacking UE games. As you will read in many other tutorials, you will need to find most importantly **UWorld AKA GWorld** which has all of the game information you could ever need. This is often referred to as UWolrd but it's actually called GWorld, UWorld is the class name in the UE Source Code. You will also often stumble across **GNames and GObjects**, GNames contains all of the class names basically, you definetly need **GNames** if you want to make something more than just a simple value hack. You will find a function in my source called mem::GetGName() which will show you how to use GNames, it is located in UnrealEngine/Utils.cpp. **GObjects** is an array just like GNames, it also can be accessed similarlly to GNames, however I don't have a function for that in my project. GObjects holds addresses to all types that the game uses at least as far as I understood it.
+
 ## UE Guide
 I had previously experience with Unity game hacking which seems definitely a lot easier than Unreal Engine game hacking. So if you are a beginner I highly recommend to start out with an easier engine to hack.
 
