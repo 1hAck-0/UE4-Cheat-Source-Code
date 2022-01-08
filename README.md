@@ -44,7 +44,7 @@ I wasn't able to make a few options/features in the menu myself so I hope some o
 * View the first comment in FHitResult::GetActor() in UnrealEngine.cpp; why do we have to add 3 to get the actual serial number!?
 If you know how to make any of these, please make a pull request!
 
-# Build and Compile
+## Build and Compile
 * You can only compile in VS22 or higher since the project was created with this version of Visual Studio. For ya all lazy asses who haven't updated from VS19, it's worth it anyway
 * Build and compile in x64 architecture since Sword With Suace is 64-bit
 * If you are still not able to compile, please put the correct path to the DirectX SDK in project settings->Configuration Properties->VC++ Directories->Include Directories and Library Directories
