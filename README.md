@@ -48,6 +48,7 @@ I wasn't able to make a few options/features in the menu myself so I hope someon
 * Use the Enemy velocity for more accurate Aimbot calculations (I was able to get the velocity of the enemies but somewhy when I tried to implement it in my calculations, my aimbot was very laggy)
 * No Recoil/Spread
 * View the first comment in FHitResult::GetActor() in UnrealEngine.cpp: Why do we have to add 3 to get the actual serial number!?
+
 If you know how to make any of these, please make a pull request!
 
 ## Build and Compile
@@ -55,7 +56,7 @@ If you know how to make any of these, please make a pull request!
 * Build and compile in x64 architecture since Sword With Suace is 64-bit
 * If you are still not able to compile, please put the correct path to the DirectX SDK in project settings->Configuration Properties->VC++ Directories->Include Directories and Library Directories
 
-## Itroduction to UE
+## Introduction to UE
 You should take a special approach to hacking UE games. As you will read in many other tutorials, you will need to find most importantly **UWorld AKA GWorld** which has all of the game information you could ever need. This is often referred to as UWolrd but it's actually called GWorld, UWorld is the class name in the UE Source Code. You will also often stumble across **GNames and GObjects**, GNames contains all of the class names basically, you definetly need **GNames** if you want to make something more than just a simple value hack. You will find a function in my source called mem::GetGName() which will show you how to use GNames, it is located in UnrealEngine/Utils.cpp. **GObjects** is an array just like GNames, it also can be accessed similarly to GNames, however I don't have a function for that in my project. GObjects holds the addresses to all types that the game uses at least as far as I understood it.
 
 The **WorldToScreen** function as well as many other methods used are universal meaning they will be the **same or almost the same across all Unreal Engine games** so you don't need to fully understand some of the things, you can just copy paste them no matter how cheap that sounds. Where the **entity list or bone matrix** is located in what struct isn't game specific, for example the entity list is in `UWorld->PersistentLevel->Actors` (only the offsets will sometimes differ between Unreal Engine versions but the path to the entity list will be the same). I found the BoneMatrix in `EntityClassObject->Mesh->CachedBoneArray`.
