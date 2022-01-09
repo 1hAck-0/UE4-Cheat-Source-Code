@@ -1,7 +1,7 @@
 # UE4 Cheat Source Code and Guide
 **FOR EDUCATIONAL PURPOSES ONLY**
 
-This a small cheat menu for Sword With Sauce (a UE4 game) that I made in a week or so. I started this project with 1 main goal in mind which is to learn the basics of Unreal Engine game hacking. You will find many comments and the purpose is to easily teach the basics of UE4 game hacking.
+This a small cheat menu for Sword With Sauce (a UE4 game) that I made in a week or so. I started this project with 1 main goal in mind which is to learn the basics of Unreal Engine game hacking.
 
 **If you find this repository useful in any way, please star it so it reachs out to more people!**
 
